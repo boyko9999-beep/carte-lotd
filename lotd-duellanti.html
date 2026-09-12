@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Carte per duellante — Legacy of the Duelist: Link Evolution</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Spectral:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#14121c; --panel:#1d1a29; --panel2:#272235; --line:#393350;
+    --gold:#c9a24a; --gold-dim:#7d6a35; --text:#ece7dc; --muted:#9b93ad;
+    --teal:#63c6c0; --danger:#e0755f; --r:10px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--ink);color:var(--text);font-family:Inter,system-ui,-apple-system,sans-serif;
+    font-size:15px;line-height:1.5;-webkit-text-size-adjust:100%}
+  h1,h2,h3,.nome{font-family:Spectral,Georgia,serif;font-weight:600}
+  button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+  input{font:inherit}
+  .wrap{max-width:900px;margin:0 auto;padding:0 14px 40px}
+
+  .top{position:sticky;top:0;z-index:20;background:rgba(20,18,28,.94);
+    backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+  .top-in{max-width:900px;margin:0 auto;padding:10px 14px;display:flex;gap:10px;align-items:center}
+  .titolo{font-size:16px;margin:0;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .indietro{width:34px;height:34px;border:1px solid var(--line);border-radius:8px;flex:none;
+    display:grid;place-items:center;color:var(--gold);font-size:20px;line-height:1}
+  .conta{font-size:12px;color:var(--muted);flex:none}
+
+  .cerca{width:100%;padding:11px 13px;background:var(--panel);border:1px solid var(--line);
+    border-radius:var(--r);color:var(--text);outline:none;margin:14px 0 10px}
+  .cerca:focus{border-color:var(--gold-dim)}
+  .cerca::placeholder{color:var(--muted)}
+  .tabs{display:flex;gap:6px;margin:14px 0 0}
+  .tab{flex:1;padding:9px 8px;border:1px solid var(--line);border-radius:8px;color:var(--muted);font-size:14px}
+  .tab[aria-selected="true"]{color:#1a1626;background:var(--gold);border-color:var(--gold);font-weight:600}
+
+  .duellanti{display:grid;gap:8px}
+  .duel{display:flex;gap:12px;align-items:center;padding:8px;background:var(--panel);
+    border:1px solid var(--line);border-radius:var(--r);width:100%;text-align:left}
+  .duel:active{background:var(--panel2)}
+  .ritratto{width:54px;height:54px;border-radius:8px;flex:none;object-fit:cover;object-position:center top;
+    background:var(--panel2);border:1px solid var(--gold-dim)}
+  .iniziali{display:grid;place-items:center;font-family:Spectral,serif;font-size:19px;color:var(--gold)}
+  .duel .nome{font-size:16px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .duel small{color:var(--muted);font-size:12.5px}
+
+  .carte{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+  @media(min-width:560px){.carte{grid-template-columns:repeat(4,1fr)}}
+  @media(min-width:760px){.carte{grid-template-columns:repeat(5,1fr)}}
+  .carta{contain:content;text-align:left;position:relative}
+  .carta img,.carta .vuota{width:100%;aspect-ratio:59/86;border-radius:5px;display:block;background:var(--panel2)}
+  .carta .vuota{border:1px dashed var(--line);display:grid;place-items:center;padding:6px;
+    font-size:10.5px;color:var(--muted);text-align:center;overflow:hidden}
+  .carta span.n{display:-webkit-box;font-size:11.5px;line-height:1.3;margin-top:5px;color:var(--muted);
+    overflow:hidden;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .rara{position:absolute;top:5px;right:5px;width:9px;height:9px;border-radius:50%;
+    background:var(--gold);box-shadow:0 0 0 2px rgba(20,18,28,.85)}
+
+  .testa{display:flex;gap:14px;align-items:center;padding:14px 0 2px}
+  .testa .ritratto{width:82px;height:82px}
+  .testa h2{margin:0;font-size:21px}
+  .testa p{margin:3px 0 0;color:var(--muted);font-size:13px}
+
+  .ris{display:flex;gap:11px;padding:10px;background:var(--panel);border:1px solid var(--line);
+    border-radius:var(--r);margin-bottom:8px;width:100%;text-align:left;align-items:flex-start}
+  .ris img,.ris .vuota{width:50px;flex:none;aspect-ratio:59/86;border-radius:4px;background:var(--panel2)}
+  .ris .nome{font-size:15px}
+  .chip{display:inline-block;padding:2px 8px;margin:5px 5px 0 0;border:1px solid var(--gold-dim);
+    border-radius:99px;font-size:11.5px;color:var(--gold)}
+
+  .velo{position:fixed;inset:0;z-index:40;background:rgba(10,8,16,.9);display:grid;place-items:center;padding:20px}
+  .scheda{max-width:320px;width:100%;text-align:center}
+  .scheda img{width:100%;border-radius:8px}
+  .scheda h3{margin:12px 0 4px;font-size:18px}
+  .scheda .meta{color:var(--muted);font-size:13px}
+  .chiudi{margin-top:14px;padding:9px 22px;border:1px solid var(--line);border-radius:8px;color:var(--muted)}
+
+  .boot{min-height:100dvh;display:flex;flex-direction:column;justify-content:center;
+    max-width:560px;margin:0 auto;padding:28px 20px}
+  .boot h1{font-size:26px;margin:0 0 6px;line-height:1.2}
+  .boot .sub{color:var(--muted);margin:0 0 20px;font-size:14px}
+  .barra{height:3px;background:var(--panel2);border-radius:2px;overflow:hidden;margin:6px 0 18px}
+  .barra i{display:block;height:100%;width:0;background:var(--gold);transition:width .25s}
+  .azione{display:block;width:100%;padding:12px;background:var(--gold);color:#1a1626;border-radius:var(--r);
+    font-weight:600;margin-top:10px;text-align:center}
+  .azione.second{background:none;border:1px solid var(--line);color:var(--text);font-weight:500}
+  .vuoto{color:var(--muted);text-align:center;padding:36px 10px;font-size:14px}
+  .caricando{color:var(--muted);font-size:13px;padding:10px 0}
+  :focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+  @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+"use strict";
+
+/* ---------- archivio locale ---------- */
+const DB = (() => {
+  let p;
+  const open = () => p || (p = new Promise((res, rej) => {
+    const r = indexedDB.open("lotd-le2", 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("kv");
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+    setTimeout(() => rej(new Error("timeout")), 4000);
+  }));
+  const tx = async (mode, fn) => {
+    try {
+      const db = await open();
+      return await new Promise((res, rej) => {
+        const q = fn(db.transaction("kv", mode).objectStore("kv"));
+        q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error);
+      });
+    } catch (e) { return null; }
+  };
+  return { get: k => tx("readonly", s => s.get(k)), set: (k, v) => tx("readwrite", s => s.put(v, k)) };
+})();
+
+/* ---------- rete ---------- */
+async function json(url, tempo = 12000) {
+  const vie = [url, "https://api.allorigins.win/raw?url=" + encodeURIComponent(url)];
+  for (const v of vie) {
+    try {
+      const c = new AbortController(), t = setTimeout(() => c.abort(), tempo);
+      const r = await fetch(v, { signal: c.signal });
+      clearTimeout(t);
+      if (r.ok) return await r.json();
+    } catch (e) {}
+  }
+  return null;
+}
+const wiki = p => json("https://yugipedia.com/api.php?" +
+  new URLSearchParams({ format: "json", formatversion: "2", origin: "*", ...p }));
+
+/* ---------- dati ---------- */
+const CATEGORIA = "Category:Yu-Gi-Oh! Legacy of the Duelist: Link Evolution sets";
+let BUSTE = [];                 // {titolo, nome, img}
+const CARTE = new Map();        // titolo -> [{n, r}]
+const ID = new Map();           // nome carta -> id immagine
+
+const pulisci = t => t.replace(/\s*\(Link Evolution\)\s*/i, "").replace(/\s+pack$/i, "").trim();
+
+async function elencoBuste() {
+  const salvate = await DB.get("buste");
+  if (salvate?.length) return salvate;
+  const d = await wiki({
+    action: "query", generator: "categorymembers", gcmtitle: CATEGORIA, gcmlimit: "500",
+    prop: "pageimages", piprop: "thumbnail", pithumbsize: "240"
+  });
+  const pagine = d?.query?.pages || [];
+  const buste = pagine
+    .filter(p => /pack/i.test(p.title))
+    .map(p => ({ titolo: p.title, nome: pulisci(p.title), img: p.thumbnail?.source || "" }))
+    .sort((a, b) => a.nome.localeCompare(b.nome, "it"));
+  if (buste.length) DB.set("buste", buste);
+  return buste;
+}
+
+function carteDaHTML(html) {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  for (const t of doc.querySelectorAll("table")) {
+    const righe = [...t.querySelectorAll("tr")];
+    if (righe.length < 6) continue;
+    const testa = [...righe[0].children].map(c => c.textContent.trim().toLowerCase());
+    const iN = testa.indexOf("name"), iR = testa.findIndex(h => h.startsWith("rarit"));
+    if (iN < 0) continue;
+    const out = [];
+    for (const r of righe.slice(1)) {
+      const celle = [...r.children].map(c => c.textContent.replace(/\s+/g, " ").trim());
+      if (!celle.length) continue;
+      let n = celle.length === testa.length ? celle[iN] : celle.find(x => x.length > 1);
+      let rar = celle.length === testa.length && iR > -1 ? celle[iR] : (celle[celle.length - 1] || "");
+      n = (n || "").replace(/^["“]|["”]$/g, "").trim();
+      if (!n || /^#$/.test(n)) continue;
+      out.push({ n, r: /rare/i.test(rar) ? "Rara" : "Comune" });
+    }
+    if (out.length > 5) return out;
+  }
+  return [];
+}
+
+async function carteDi(titolo) {
+  if (CARTE.has(titolo)) return CARTE.get(titolo);
+  const salvate = await DB.get("carte:" + titolo);
+  if (salvate) { CARTE.set(titolo, salvate); return salvate; }
+  const d = await wiki({ action: "parse", page: titolo, prop: "text" });
+  const lista = d?.parse?.text ? carteDaHTML(d.parse.text) : [];
+  if (lista.length) { CARTE.set(titolo, lista); DB.set("carte:" + titolo, lista); }
+  return lista;
+}
+
+/* ---------- immagini carte ---------- */
+const img = id => `https://images.ygoprodeck.com/images/cards_small/${id}.jpg`;
+const imgGrande = id => `https://images.ygoprodeck.com/images/cards/${id}.jpg`;
+
+async function risolviId(nomi) {
+  const mancanti = [...new Set(nomi)].filter(n => !ID.has(n.toLowerCase()));
+  if (!mancanti.length) return false;
+  for (let i = 0; i < mancanti.length; i += 30) {
+    const gruppo = mancanti.slice(i, i + 30);
+    const d = await json("https://db.ygoprodeck.com/api/v7/cardinfo.php?name=" +
+      encodeURIComponent(gruppo.join("|")), 15000);
+    for (const c of (d?.data || [])) ID.set(String(c.name).toLowerCase(), c.card_images?.[0]?.id || c.id);
+    for (const n of gruppo) if (!ID.has(n.toLowerCase())) ID.set(n.toLowerCase(), 0);
+  }
+  DB.set("id", [...ID.entries()]);
+  return true;
+}
+
+/* ---------- interfaccia ---------- */
+const app = document.getElementById("app");
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const iniziali = n => n.split(/\s+/).slice(0, 2).map(w => w[0] || "").join("").toUpperCase();
+let vista = "duellanti", tutteCaricate = false;
+
+const ritrattoHTML = (b, cls = "ritratto") => b.img
+  ? `<img class="${cls}" src="${esc(b.img)}" alt="" loading="lazy">`
+  : `<div class="${cls} iniziali">${esc(iniziali(b.nome))}</div>`;
+
+function cartaHTML(c, chiave) {
+  const id = ID.get(c.n.toLowerCase());
+  return `<button class="carta" data-c="${esc(chiave)}">
+    ${id ? `<img src="${img(id)}" alt="${esc(c.n)}" loading="lazy" decoding="async">`
+         : `<div class="vuota">${esc(c.n)}</div>`}
+    ${c.r === "Rara" ? `<i class="rara" title="Rara"></i>` : ""}
+    <span class="n">${esc(c.n)}</span></button>`;
+}
+
+function intestazione(titolo, conta, indietro) {
+  return `<header class="top"><div class="top-in">
+    ${indietro ? `<button class="indietro" id="back" aria-label="Torna indietro">‹</button>` : ""}
+    <h1 class="titolo">${esc(titolo)}</h1>
+    ${conta ? `<span class="conta">${conta}</span>` : ""}
+  </div></header>`;
+}
+
+function home(filtro = "") {
+  const f = filtro.trim().toLowerCase();
+  const el = BUSTE.filter(b => !f || b.nome.toLowerCase().includes(f));
+  app.innerHTML = intestazione("Legacy of the Duelist: Link Evolution", BUSTE.length + " duellanti") + `
+    <div class="wrap">
+      <div class="tabs">
+        <button class="tab" aria-selected="true" data-v="duellanti">Duellanti</button>
+        <button class="tab" aria-selected="false" data-v="carte">Cerca una carta</button>
+      </div>
+      <input class="cerca" id="q" placeholder="Cerca un duellante" value="${esc(filtro)}">
+      ${el.length ? `<div class="duellanti">${el.map(b => `
+        <button class="duel" data-b="${esc(b.titolo)}">${ritrattoHTML(b)}
+          <span style="min-width:0"><span class="nome">${esc(b.nome)}</span>
+          <small>${CARTE.has(b.titolo) ? CARTE.get(b.titolo).length + " carte" : "busta del Card Shop"}</small>
+          </span></button>`).join("")}</div>`
+        : `<p class="vuoto">Nessun duellante con questo nome.</p>`}
+    </div>`;
+  legaRicerca(v => home(v));
+}
+
+function ricercaCarte(filtro = "") {
+  const f = filtro.trim().toLowerCase();
+  let corpo;
+  if (!tutteCaricate) {
+    corpo = `<p class="vuoto">Per cercare una carta fra tutti i duellanti devo prima scaricare
+      le liste di tutte le buste. Si fa una volta sola.</p>
+      <button class="azione" id="tutte">Scarica tutte le liste</button>`;
+  } else if (!f) {
+    corpo = `<p class="vuoto">Scrivi il nome di una carta per vedere in quali buste si trova.</p>`;
+  } else {
+    const trovate = new Map();
+    for (const b of BUSTE) for (const c of (CARTE.get(b.titolo) || []))
+      if (c.n.toLowerCase().includes(f)) {
+        if (!trovate.has(c.n)) trovate.set(c.n, []);
+        trovate.get(c.n).push(b.nome + (c.r === "Rara" ? " · rara" : ""));
+      }
+    const el = [...trovate.entries()].slice(0, 50);
+    corpo = el.length ? el.map(([n, dove]) => {
+      const id = ID.get(n.toLowerCase());
+      return `<button class="ris" data-c="${esc(n)}">
+        ${id ? `<img src="${img(id)}" alt="" loading="lazy">` : `<div class="vuota"></div>`}
+        <span style="min-width:0"><span class="nome">${esc(n)}</span>
+        <div>${dove.map(d => `<span class="chip">${esc(d)}</span>`).join("")}</div></span></button>`;
+    }).join("") : `<p class="vuoto">Nessuna carta trovata.</p>`;
+  }
+  app.innerHTML = intestazione("Legacy of the Duelist: Link Evolution") + `
+    <div class="wrap">
+      <div class="tabs">
+        <button class="tab" aria-selected="false" data-v="duellanti">Duellanti</button>
+        <button class="tab" aria-selected="true" data-v="carte">Cerca una carta</button>
+      </div>
+      ${tutteCaricate ? `<input class="cerca" id="q" placeholder="Cerca una carta" value="${esc(filtro)}">` : ""}
+      ${corpo}
+    </div>`;
+  legaRicerca(v => ricercaCarte(v));
+  const b = document.getElementById("tutte");
+  if (b) b.onclick = scaricaTutte;
+  if (f) {
+    const nomi = [];
+    for (const b2 of BUSTE) for (const c of (CARTE.get(b2.titolo) || []))
+      if (c.n.toLowerCase().includes(f)) nomi.push(c.n);
+    risolviId(nomi.slice(0, 50)).then(ok => ok && ricercaCarte(filtro));
+  }
+}
+
+async function scaricaTutte() {
+  const box = document.querySelector(".wrap");
+  box.insertAdjacentHTML("beforeend", `<div class="barra"><i id="bar"></i></div><p class="caricando" id="st"></p>`);
+  const bar = document.getElementById("bar"), st = document.getElementById("st");
+  let fatte = 0;
+  for (const b of BUSTE) {
+    await carteDi(b.titolo);
+    fatte++;
+    bar.style.width = (fatte / BUSTE.length * 100) + "%";
+    st.textContent = `${fatte} di ${BUSTE.length} buste`;
+  }
+  tutteCaricate = true;
+  DB.set("tutte", true);
+  ricercaCarte();
+}
+
+async function duellante(b, filtro = "") {
+  const attesa = !CARTE.has(b.titolo);
+  app.innerHTML = intestazione(b.nome, "", true) + `
+    <div class="wrap">
+      <div class="testa">${ritrattoHTML(b)}<div><h2>${esc(b.nome)}</h2>
+        <p id="sotto">${attesa ? "Carico la lista carte" : ""}</p></div></div>
+      <div id="corpo"></div>
+    </div>`;
+  document.getElementById("back").onclick = () => home();
+  const lista = await carteDi(b.titolo);
+  if (!lista.length) {
+    document.getElementById("corpo").innerHTML =
+      `<p class="vuoto">Non sono riuscito a leggere la lista di questa busta.</p>`;
+    return;
+  }
+  const f = filtro.trim().toLowerCase();
+  const mostrate = lista.filter(c => !f || c.n.toLowerCase().includes(f));
+  document.getElementById("sotto").textContent =
+    `${lista.length} carte · ${lista.filter(c => c.r === "Rara").length} rare`;
+  document.getElementById("corpo").innerHTML =
+    `<input class="cerca" id="q" placeholder="Filtra queste carte" value="${esc(filtro)}">
+     <div class="carte">${mostrate.map(c => cartaHTML(c, c.n)).join("")}</div>`;
+  legaRicerca(v => duellante(b, v));
+  if (await risolviId(lista.map(c => c.n))) {
+    const g = document.querySelector(".carte");
+    if (g) g.innerHTML = mostrate.map(c => cartaHTML(c, c.n)).join("");
+  }
+}
+
+function legaRicerca(fn) {
+  const q = document.getElementById("q");
+  if (!q) return;
+  q.oninput = () => {
+    const v = q.value;
+    clearTimeout(q._t);
+    q._t = setTimeout(() => { fn(v); const n = document.getElementById("q"); if (n) { n.focus(); n.setSelectionRange(v.length, v.length); } }, 250);
+  };
+}
+
+function scheda(nome) {
+  const id = ID.get(nome.toLowerCase());
+  const dove = [];
+  for (const b of BUSTE) {
+    const c = (CARTE.get(b.titolo) || []).find(x => x.n === nome);
+    if (c) dove.push(b.nome + (c.r === "Rara" ? " · rara" : ""));
+  }
+  const v = document.createElement("div");
+  v.className = "velo";
+  v.innerHTML = `<div class="scheda">
+    ${id ? `<img src="${imgGrande(id)}" alt="${esc(nome)}">` : ""}
+    <h3>${esc(nome)}</h3>
+    ${dove.length ? `<div>${dove.map(d => `<span class="chip">${esc(d)}</span>`).join("")}</div>`
+      : `<div class="meta">Busta non ancora caricata</div>`}
+    <button class="chiudi">Chiudi</button></div>`;
+  v.onclick = () => v.remove();
+  document.body.appendChild(v);
+}
+
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-b]");
+  if (b) return duellante(BUSTE.find(x => x.titolo === b.dataset.b));
+  const c = e.target.closest("[data-c]");
+  if (c) return scheda(c.dataset.c);
+  const t = e.target.closest("[data-v]");
+  if (t) { vista = t.dataset.v; vista === "carte" ? ricercaCarte() : home(); }
+});
+
+/* ---------- avvio ---------- */
+async function avvia() {
+  app.innerHTML = `<div class="boot"><h1>Carte per duellante</h1>
+    <p class="sub">Legacy of the Duelist: Link Evolution</p>
+    <div class="barra"><i style="width:35%"></i></div>
+    <p class="caricando">Chiedo a Yugipedia l'elenco dei duellanti</p></div>`;
+
+  const salvati = await DB.get("id");
+  if (salvati) for (const [k, v] of salvati) ID.set(k, v);
+  tutteCaricate = !!(await DB.get("tutte"));
+
+  BUSTE = await elencoBuste() || [];
+  if (!BUSTE.length) {
+    app.innerHTML = `<div class="boot"><h1>Non arrivo ai dati</h1>
+      <p class="sub">Yugipedia non risponde da questo browser. Può essere la connessione,
+      oppure l'anteprima in cui stai aprendo il file: prova a scaricarlo e ad aprirlo in Chrome o Safari.</p>
+      <button class="azione" onclick="location.reload()">Riprova</button></div>`;
+    return;
+  }
+  if (tutteCaricate) for (const b of BUSTE) await carteDi(b.titolo);
+  home();
+}
+avvia();
+</script>
+</body>
+</html>
