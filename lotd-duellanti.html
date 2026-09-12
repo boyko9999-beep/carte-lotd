@@ -22,7 +22,7 @@
   input{font:inherit}
   .wrap{max-width:900px;margin:0 auto;padding:0 14px 40px}
 
-  .top{position:sticky;top:0;z-index:20;background:rgba(20,18,28,.94);
+  .top{position:sticky;top:0;z-index:20;background:rgba(20,18,28,.95);
     backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
   .top-in{max-width:900px;margin:0 auto;padding:10px 14px;display:flex;gap:10px;align-items:center}
   .titolo{font-size:16px;margin:0;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -38,6 +38,7 @@
   .tab{flex:1;padding:9px 8px;border:1px solid var(--line);border-radius:8px;color:var(--muted);font-size:14px}
   .tab[aria-selected="true"]{color:#1a1626;background:var(--gold);border-color:var(--gold);font-weight:600}
 
+  .serie{font-size:12.5px;color:var(--muted);margin:18px 0 7px;letter-spacing:.3px}
   .duellanti{display:grid;gap:8px}
   .duel{display:flex;gap:12px;align-items:center;padding:8px;background:var(--panel);
     border:1px solid var(--line);border-radius:var(--r);width:100%;text-align:left}
@@ -48,6 +49,12 @@
   .duel .nome{font-size:16px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .duel small{color:var(--muted);font-size:12.5px}
 
+  .filtri{display:flex;gap:6px;overflow-x:auto;padding:2px 0 10px;-webkit-overflow-scrolling:touch}
+  .f{flex:none;padding:6px 11px;border:1px solid var(--line);border-radius:99px;font-size:13px;color:var(--muted);
+    display:flex;align-items:center;gap:6px;white-space:nowrap}
+  .f[aria-pressed="true"]{color:var(--text);border-color:var(--gold);background:var(--panel2)}
+  .pallino{width:9px;height:9px;border-radius:2px;display:inline-block}
+
   .carte{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
   @media(min-width:560px){.carte{grid-template-columns:repeat(4,1fr)}}
   @media(min-width:760px){.carte{grid-template-columns:repeat(5,1fr)}}
@@ -56,7 +63,7 @@
   .carta .vuota{border:1px dashed var(--line);display:grid;place-items:center;padding:6px;
     font-size:10.5px;color:var(--muted);text-align:center;overflow:hidden}
   .carta span.n{display:-webkit-box;font-size:11.5px;line-height:1.3;margin-top:5px;color:var(--muted);
-    overflow:hidden;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+    overflow:hidden;-webkit-line-clamp:2;-webkit-box-orient:vertical;border-left:3px solid transparent;padding-left:5px}
   .rara{position:absolute;top:5px;right:5px;width:9px;height:9px;border-radius:50%;
     background:var(--gold);box-shadow:0 0 0 2px rgba(20,18,28,.85)}
 
@@ -99,11 +106,39 @@
 <script>
 "use strict";
 
-/* ---------- archivio locale ---------- */
+/* ============ buste del Card Shop, per serie ============ */
+const SERIE = [
+  ["Duel Monsters", ["Grandpa Muto", "Mai Valentine", "Bakura", "Joey Wheeler", "Seto Kaiba", "Yugi"]],
+  ["GX", ["Alexis Rhodes", "Bastion Misawa", "Chazz Princeton", "Syrus Truesdale", "Jesse Anderson", "Jaden Yuki"]],
+  ["5D's", ["Tetsu Trudge", "Leo/Luna", "Akiza Izinski", "Jack Atlas", "Crow", "Yusei Fudo"]],
+  ["ZEXAL", ["Cathy Katherine", "Quinton", "Kite Tenjo", "Shark", "Yuma Tsukumo"]],
+  ["ARC-V", ["Gong Strong", "Zuzu Boyle", "Shay", "Declan Akaba", "Yuya Sakaki"]],
+  ["VRAINS", ["Playmaker", "Blue Angel", "Soulburner", "Varis", "Ai"]]
+];
+const NOMI = SERIE.flatMap(s => s[1]);
+const PAGINA = {
+  "Yugi": "Yugi Muto", "Bakura": "Bakura", "Shark": "Reginald Kastle", "Crow": "Crow Hogan",
+  "Leo/Luna": "Leo", "Quinton": "Quinton", "Ai": "Ai (character)", "Varis": "Varis",
+  "Playmaker": "Yusaku Fujiki", "Blue Angel": "Aoi Zaizen", "Soulburner": "Takeru Homura",
+  "Grandpa Muto": "Solomon Muto", "Gong Strong": "Gong Strong", "Shay": "Shay Obsidian"
+};
+
+/* colori delle cornici */
+const CORNICE = {
+  normal: ["Mostro normale", "#c9a86b"], effect: ["Mostro effetto", "#c47b3f"],
+  ritual: ["Rituale", "#5a7fc4"], fusion: ["Fusione", "#8a5fb0"],
+  synchro: ["Synchro", "#d8d4cc"], xyz: ["Xyz", "#2f2c38"],
+  link: ["Link", "#2e6fa3"], spell: ["Magia", "#2e9b8f"], trap: ["Trappola", "#b8447f"],
+  normal_pendulum: ["Pendulum", "#5fa87a"], effect_pendulum: ["Pendulum", "#5fa87a"],
+  token: ["Token", "#8d8a96"], skill: ["Skill", "#8d8a96"]
+};
+const gruppo = f => (f || "").replace(/_pendulum$/, "_pendulum").replace(/^(xyz|synchro|fusion|ritual)_pendulum$/, "$1");
+
+/* ============ archivio locale ============ */
 const DB = (() => {
   let p;
   const open = () => p || (p = new Promise((res, rej) => {
-    const r = indexedDB.open("lotd-le3", 1);
+    const r = indexedDB.open("lotd-le4", 1);
     r.onupgradeneeded = () => r.result.createObjectStore("kv");
     r.onsuccess = () => res(r.result);
     r.onerror = () => rej(r.error);
@@ -121,204 +156,182 @@ const DB = (() => {
   return { get: k => tx("readonly", s => s.get(k)), set: (k, v) => tx("readwrite", s => s.put(v, k)) };
 })();
 
-/* ---------- rete ---------- */
-async function json(url, tempo = 15000) {
-  const vie = [url, "https://api.allorigins.win/raw?url=" + encodeURIComponent(url)];
+/* ============ rete ============ */
+async function testo(url, tempo = 25000) {
+  const vie = [
+    "https://api.allorigins.win/raw?url=" + encodeURIComponent(url),
+    "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(url),
+    "https://corsproxy.io/?url=" + encodeURIComponent(url)
+  ];
   for (const v of vie) {
     try {
       const c = new AbortController(), t = setTimeout(() => c.abort(), tempo);
       const r = await fetch(v, { signal: c.signal });
       clearTimeout(t);
-      if (r.ok) return await r.json();
+      if (r.ok) { const s = await r.text(); if (s && s.length > 2000) return s; }
     } catch (e) {}
   }
   return null;
 }
-const wiki = p => json("https://yugipedia.com/api.php?" +
-  new URLSearchParams({ format: "json", formatversion: "2", origin: "*", ...p }));
-
-/* ---------- elenco buste ---------- */
-const CATEGORIA = "Category:Yu-Gi-Oh! Legacy of the Duelist: Link Evolution sets";
-const CARDSHOP = "Yu-Gi-Oh! Legacy of the Duelist: Link Evolution/Card Shop";
-const ePack = t => /pack \(Link Evolution\)$/i.test(t) || /^Grandpa Muto pack/i.test(t);
-const pulisci = t => t.replace(/\s*\(Link Evolution\)\s*/i, "").replace(/\s+pack$/i, "").trim();
-
-let BUSTE = [];
-const CARTE = new Map();
-const ID = new Map();
-
-async function daCategoria() {
-  const titoli = [];
-  let cont = null, giri = 0;
-  do {
-    const d = await wiki({
-      action: "query", list: "categorymembers", cmtitle: CATEGORIA, cmlimit: "500",
-      ...(cont ? { cmcontinue: cont } : {})
-    });
-    for (const p of (d?.query?.categorymembers || [])) titoli.push(p.title);
-    cont = d?.continue?.cmcontinue;
-  } while (cont && ++giri < 12);
-  return titoli;
+async function json(url, tempo = 15000) {
+  try {
+    const c = new AbortController(), t = setTimeout(() => c.abort(), tempo);
+    const r = await fetch(url, { signal: c.signal });
+    clearTimeout(t);
+    if (r.ok) return await r.json();
+  } catch (e) {}
+  return null;
 }
 
-async function daCardShop() {
-  const d = await wiki({ action: "parse", page: CARDSHOP, prop: "links" });
-  return (d?.parse?.links || []).filter(l => l.ns === 0).map(l => l.title);
-}
+/* ============ liste carte ============ */
+const GUIDA = "https://gamefaqs.gamespot.com/pc/280088-yu-gi-oh-legacy-of-the-duelist-link-evolution/faqs/79850";
+const CARTE = new Map();   // nome busta -> [{n, r}]
+const ID = new Map();      // nome carta -> {i: id, f: frameType}
 
-async function elencoBuste(forza) {
-  if (!forza) {
-    const salvate = await DB.get("buste");
-    if (salvate?.length > 20) return salvate;
-  }
-  const insieme = new Set();
-  for (const t of await daCategoria()) if (ePack(t)) insieme.add(t);
-  if (insieme.size < 30) for (const t of await daCardShop()) if (ePack(t)) insieme.add(t);
-  const titoli = [...insieme];
-  if (!titoli.length) return [];
-
-  const copertine = new Map();
-  for (let i = 0; i < titoli.length; i += 40) {
-    const d = await wiki({
-      action: "query", titles: titoli.slice(i, i + 40).join("|"),
-      prop: "pageimages", piprop: "thumbnail", pithumbsize: "240"
-    });
-    for (const p of (d?.query?.pages || []))
-      if (p.thumbnail?.source) copertine.set(p.title, p.thumbnail.source);
-  }
-
-  const buste = titoli
-    .map(t => ({ titolo: t, nome: pulisci(t), img: copertine.get(t) || "" }))
-    .sort((a, b) => a.nome.localeCompare(b.nome, "it"));
-  DB.set("buste", buste);
-  return buste;
-}
-
-/* ---------- carte di una busta ---------- */
-function carteDaHTML(html) {
+function analizza(html) {
   const doc = new DOMParser().parseFromString(html, "text/html");
-  for (const t of doc.querySelectorAll("table")) {
-    const righe = [...t.querySelectorAll("tr")];
-    if (righe.length < 6) continue;
-    const testa = [...righe[0].children].map(c => c.textContent.trim().toLowerCase());
-    const iN = testa.indexOf("name"), iR = testa.findIndex(h => h.startsWith("rarit"));
-    if (iN < 0) continue;
-    const out = [];
-    for (const r of righe.slice(1)) {
-      const celle = [...r.children].map(c => c.textContent.replace(/\s+/g, " ").trim());
-      if (!celle.length) continue;
-      let n = celle.length === testa.length ? celle[iN] : celle.find(x => x.length > 1);
-      const rar = celle.length === testa.length && iR > -1 ? celle[iR] : (celle[celle.length - 1] || "");
-      n = (n || "").replace(/^["“]|["”]$/g, "").trim();
-      if (!n || n === "#") continue;
-      out.push({ n, r: /rare/i.test(rar) ? "Rara" : "Comune" });
+  const t = (doc.body ? doc.body.textContent : html).split(/\r?\n/);
+  const out = new Map();
+  let busta = null;
+  for (let i = 0; i < t.length; i++) {
+    const l = t[i].trim();
+    if (/^={6,}$/.test(l) && /pack\s*$/i.test((t[i + 1] || "").trim()) && /^={6,}$/.test((t[i + 2] || "").trim())) {
+      busta = t[i + 1].trim().replace(/\s+pack\s*$/i, "");
+      if (!out.has(busta)) out.set(busta, []);
+      i += 2;
+      continue;
     }
-    if (out.length > 5) return out;
+    if (!busta) continue;
+    const m = l.match(/^"(.+)"\s*(Rare)?$/i);
+    if (m) out.get(busta).push({ n: m[1].trim(), r: m[2] ? "Rara" : "Comune" });
   }
-  return [];
+  for (const [k, v] of [...out]) if (v.length < 5) out.delete(k);
+  return out;
 }
 
-async function carteDi(titolo) {
-  if (CARTE.has(titolo)) return CARTE.get(titolo);
-  const salvate = await DB.get("carte:" + titolo);
-  if (salvate) { CARTE.set(titolo, salvate); return salvate; }
-  const d = await wiki({ action: "parse", page: titolo, prop: "text" });
-  const lista = d?.parse?.text ? carteDaHTML(d.parse.text) : [];
-  if (lista.length) { CARTE.set(titolo, lista); DB.set("carte:" + titolo, lista); }
-  return lista;
+async function caricaListe() {
+  const salvate = await DB.get("liste");
+  if (salvate && salvate.length > 20) {
+    for (const [k, v] of salvate) CARTE.set(k, v);
+    return true;
+  }
+  const html = await testo(GUIDA);
+  if (!html) return false;
+  const mappa = analizza(html);
+  if (mappa.size < 10) return false;
+  for (const [k, v] of mappa) CARTE.set(k, v);
+  DB.set("liste", [...mappa.entries()]);
+  return true;
 }
 
-/* ---------- immagini carte ---------- */
+/* ============ immagini e tipo carta ============ */
 const img = id => `https://images.ygoprodeck.com/images/cards_small/${id}.jpg`;
 const imgGrande = id => `https://images.ygoprodeck.com/images/cards/${id}.jpg`;
 
 async function risolviId(nomi) {
   const mancanti = [...new Set(nomi)].filter(n => !ID.has(n.toLowerCase()));
   if (!mancanti.length) return false;
-  for (let i = 0; i < mancanti.length; i += 30) {
-    const gruppo = mancanti.slice(i, i + 30);
-    const d = await json("https://db.ygoprodeck.com/api/v7/cardinfo.php?name=" +
-      encodeURIComponent(gruppo.join("|")), 15000);
-    for (const c of (d?.data || [])) ID.set(String(c.name).toLowerCase(), c.card_images?.[0]?.id || c.id);
-    for (const n of gruppo) if (!ID.has(n.toLowerCase())) ID.set(n.toLowerCase(), 0);
+  for (let i = 0; i < mancanti.length; i += 25) {
+    const g = mancanti.slice(i, i + 25);
+    const d = await json("https://db.ygoprodeck.com/api/v7/cardinfo.php?name=" + encodeURIComponent(g.join("|")));
+    for (const c of (d?.data || []))
+      ID.set(String(c.name).toLowerCase(), { i: c.card_images?.[0]?.id || c.id, f: c.frameType || "" });
+    for (const n of g) if (!ID.has(n.toLowerCase())) ID.set(n.toLowerCase(), { i: 0, f: "" });
   }
   DB.set("id", [...ID.entries()]);
   return true;
 }
 
-/* ---------- interfaccia ---------- */
+/* ============ ritratti ============ */
+const RITRATTO = new Map();
+async function caricaRitratti() {
+  const salvati = await DB.get("ritratti");
+  if (salvati) { for (const [k, v] of salvati) RITRATTO.set(k, v); return; }
+  const titoli = NOMI.map(n => PAGINA[n] || n);
+  for (let i = 0; i < titoli.length; i += 20) {
+    const d = await json("https://yugipedia.com/api.php?" + new URLSearchParams({
+      action: "query", format: "json", formatversion: "2", origin: "*", redirects: "1",
+      prop: "pageimages", piprop: "thumbnail", pithumbsize: "220",
+      titles: titoli.slice(i, i + 20).join("|")
+    }));
+    for (const p of (d?.query?.pages || []))
+      if (p.thumbnail?.source) RITRATTO.set(p.title, p.thumbnail.source);
+  }
+  DB.set("ritratti", [...RITRATTO.entries()]);
+}
+const ritrattoDi = n => RITRATTO.get(PAGINA[n] || n) || "";
+
+/* ============ interfaccia ============ */
 const app = document.getElementById("app");
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-const iniziali = n => n.split(/\s+/).slice(0, 2).map(w => w[0] || "").join("").toUpperCase();
-let tutteCaricate = false;
+const iniziali = n => n.split(/[\s\/]+/).slice(0, 2).map(w => w[0] || "").join("").toUpperCase();
+let tipiAttivi = new Set();
 
-const ritrattoHTML = (b, cls = "ritratto") => b.img
-  ? `<img class="${cls}" src="${esc(b.img)}" alt="" loading="lazy">`
-  : `<div class="${cls} iniziali">${esc(iniziali(b.nome))}</div>`;
-
-function cartaHTML(c) {
-  const id = ID.get(c.n.toLowerCase());
-  return `<button class="carta" data-c="${esc(c.n)}">
-    ${id ? `<img src="${img(id)}" alt="${esc(c.n)}" loading="lazy" decoding="async">`
-         : `<div class="vuota">${esc(c.n)}</div>`}
-    ${c.r === "Rara" ? `<i class="rara"></i>` : ""}
-    <span class="n">${esc(c.n)}</span></button>`;
+function ritrattoHTML(nome, cls = "ritratto") {
+  const u = ritrattoDi(nome);
+  return u ? `<img class="${cls}" src="${esc(u)}" alt="" loading="lazy">`
+           : `<div class="${cls} iniziali">${esc(iniziali(nome))}</div>`;
 }
 
-const intestazione = (titolo, conta, indietro) => `<header class="top"><div class="top-in">
-  ${indietro ? `<button class="indietro" id="back" aria-label="Torna indietro">‹</button>` : ""}
-  <h1 class="titolo">${esc(titolo)}</h1>
+function cartaHTML(c) {
+  const d = ID.get(c.n.toLowerCase()) || {};
+  const col = CORNICE[d.f]?.[1] || "transparent";
+  return `<button class="carta" data-c="${esc(c.n)}">
+    ${d.i ? `<img src="${img(d.i)}" alt="${esc(c.n)}" loading="lazy" decoding="async">`
+          : `<div class="vuota">${esc(c.n)}</div>`}
+    ${c.r === "Rara" ? `<i class="rara"></i>` : ""}
+    <span class="n" style="border-left-color:${col}">${esc(c.n)}</span></button>`;
+}
+
+const intestazione = (t, conta, indietro) => `<header class="top"><div class="top-in">
+  ${indietro ? `<button class="indietro" id="back" aria-label="Indietro">‹</button>` : ""}
+  <h1 class="titolo">${esc(t)}</h1>
   ${conta ? `<span class="conta">${esc(conta)}</span>` : ""}</div></header>`;
 
 function home(filtro = "") {
   const f = filtro.trim().toLowerCase();
-  const el = BUSTE.filter(b => !f || b.nome.toLowerCase().includes(f));
-  app.innerHTML = intestazione("Legacy of the Duelist: Link Evolution", BUSTE.length + " duellanti") + `
+  const totale = [...CARTE.values()].reduce((a, b) => a + b.length, 0);
+  let corpo = "";
+  for (const [serie, nomi] of SERIE) {
+    const el = nomi.filter(n => !f || n.toLowerCase().includes(f));
+    if (!el.length) continue;
+    corpo += `<p class="serie">${esc(serie)}</p><div class="duellanti">` + el.map(n => {
+      const lista = CARTE.get(n);
+      return `<button class="duel" data-b="${esc(n)}">${ritrattoHTML(n)}
+        <span style="min-width:0"><span class="nome">${esc(n)}</span>
+        <small>${lista ? lista.length + " carte" : "lista non disponibile"}</small></span></button>`;
+    }).join("") + `</div>`;
+  }
+  app.innerHTML = intestazione("Legacy of the Duelist: Link Evolution", totale ? totale + " carte" : "") + `
     <div class="wrap">
       <div class="tabs">
         <button class="tab" aria-selected="true" data-v="duellanti">Duellanti</button>
         <button class="tab" aria-selected="false" data-v="carte">Cerca una carta</button>
       </div>
       <input class="cerca" id="q" placeholder="Cerca un duellante" value="${esc(filtro)}">
-      ${el.length ? `<div class="duellanti">${el.map(b => `
-        <button class="duel" data-b="${esc(b.titolo)}">${ritrattoHTML(b)}
-          <span style="min-width:0"><span class="nome">${esc(b.nome)}</span>
-          <small>${CARTE.has(b.titolo) ? CARTE.get(b.titolo).length + " carte" : "busta del Card Shop"}</small>
-          </span></button>`).join("")}</div>`
-        : `<p class="vuoto">Nessun duellante con questo nome.</p>`}
-      <button class="azione second" id="ricarica">Aggiorna l'elenco dei duellanti</button>
+      ${corpo || `<p class="vuoto">Nessun duellante con questo nome.</p>`}
     </div>`;
   legaRicerca(v => home(v));
-  document.getElementById("ricarica").onclick = async (e) => {
-    e.target.textContent = "Aggiorno…";
-    BUSTE = await elencoBuste(true) || BUSTE;
-    home();
-  };
 }
 
 function ricercaCarte(filtro = "") {
   const f = filtro.trim().toLowerCase();
   let corpo;
-  if (!tutteCaricate) {
-    corpo = `<p class="vuoto">Per cercare fra tutte le carte devo prima scaricare le liste
-      di tutte le buste. Si fa una volta sola.</p>
-      <button class="azione" id="tutte">Scarica tutte le liste</button>`;
-  } else if (!f) {
-    corpo = `<p class="vuoto">Scrivi il nome di una carta per vedere in quali buste si trova.</p>`;
-  } else {
+  if (!f) corpo = `<p class="vuoto">Scrivi il nome di una carta per vedere in quali buste si trova.</p>`;
+  else {
     const trovate = new Map();
-    for (const b of BUSTE) for (const c of (CARTE.get(b.titolo) || []))
+    for (const n of NOMI) for (const c of (CARTE.get(n) || []))
       if (c.n.toLowerCase().includes(f)) {
         if (!trovate.has(c.n)) trovate.set(c.n, []);
-        trovate.get(c.n).push(b.nome + (c.r === "Rara" ? " · rara" : ""));
+        trovate.get(c.n).push(n + (c.r === "Rara" ? " · rara" : ""));
       }
     const el = [...trovate.entries()].slice(0, 50);
     corpo = el.length ? el.map(([n, dove]) => {
-      const id = ID.get(n.toLowerCase());
+      const d = ID.get(n.toLowerCase()) || {};
       return `<button class="ris" data-c="${esc(n)}">
-        ${id ? `<img src="${img(id)}" alt="" loading="lazy">` : `<div class="vuota"></div>`}
+        ${d.i ? `<img src="${img(d.i)}" alt="" loading="lazy">` : `<div class="vuota"></div>`}
         <span style="min-width:0"><span class="nome">${esc(n)}</span>
-        <div>${dove.map(d => `<span class="chip">${esc(d)}</span>`).join("")}</div></span></button>`;
+        <div>${dove.map(x => `<span class="chip">${esc(x)}</span>`).join("")}</div></span></button>`;
     }).join("") : `<p class="vuoto">Nessuna carta trovata.</p>`;
   }
   app.innerHTML = intestazione("Legacy of the Duelist: Link Evolution") + `
@@ -327,62 +340,46 @@ function ricercaCarte(filtro = "") {
         <button class="tab" aria-selected="false" data-v="duellanti">Duellanti</button>
         <button class="tab" aria-selected="true" data-v="carte">Cerca una carta</button>
       </div>
-      ${tutteCaricate ? `<input class="cerca" id="q" placeholder="Cerca una carta" value="${esc(filtro)}">` : ""}
+      <input class="cerca" id="q" placeholder="Cerca una carta" value="${esc(filtro)}">
       ${corpo}
     </div>`;
   legaRicerca(v => ricercaCarte(v));
-  const b = document.getElementById("tutte");
-  if (b) b.onclick = scaricaTutte;
   if (f) {
     const nomi = [];
-    for (const b2 of BUSTE) for (const c of (CARTE.get(b2.titolo) || []))
+    for (const n of NOMI) for (const c of (CARTE.get(n) || []))
       if (c.n.toLowerCase().includes(f)) nomi.push(c.n);
     risolviId(nomi.slice(0, 50)).then(ok => ok && ricercaCarte(filtro));
   }
 }
 
-async function scaricaTutte() {
-  const box = document.querySelector(".wrap");
-  box.insertAdjacentHTML("beforeend", `<div class="barra"><i id="bar"></i></div><p class="caricando" id="st"></p>`);
-  const bar = document.getElementById("bar"), st = document.getElementById("st");
-  let fatte = 0;
-  for (const b of BUSTE) {
-    await carteDi(b.titolo);
-    fatte++;
-    bar.style.width = (fatte / BUSTE.length * 100) + "%";
-    st.textContent = `${fatte} di ${BUSTE.length} buste`;
-  }
-  tutteCaricate = true;
-  DB.set("tutte", true);
-  ricercaCarte();
-}
-
-async function duellante(b, filtro = "") {
-  app.innerHTML = intestazione(b.nome, "", true) + `
-    <div class="wrap">
-      <div class="testa">${ritrattoHTML(b)}<div><h2>${esc(b.nome)}</h2>
-        <p id="sotto">${CARTE.has(b.titolo) ? "" : "Carico la lista carte"}</p></div></div>
-      <div id="corpo"></div>
-    </div>`;
-  document.getElementById("back").onclick = () => home();
-  const lista = await carteDi(b.titolo);
-  if (!lista.length) {
-    document.getElementById("corpo").innerHTML =
-      `<p class="vuoto">Non sono riuscito a leggere la lista di questa busta.</p>`;
-    return;
-  }
+async function duellante(nome, filtro = "") {
+  const lista = CARTE.get(nome) || [];
   const f = filtro.trim().toLowerCase();
-  const mostrate = lista.filter(c => !f || c.n.toLowerCase().includes(f));
-  document.getElementById("sotto").textContent =
-    `${lista.length} carte · ${lista.filter(c => c.r === "Rara").length} rare`;
-  document.getElementById("corpo").innerHTML =
-    `<input class="cerca" id="q" placeholder="Filtra queste carte" value="${esc(filtro)}">
-     <div class="carte">${mostrate.map(cartaHTML).join("")}</div>`;
-  legaRicerca(v => duellante(b, v));
-  if (await risolviId(lista.map(c => c.n))) {
-    const g = document.querySelector(".carte");
-    if (g) g.innerHTML = mostrate.map(cartaHTML).join("");
-  }
+  const presenti = [...new Set(lista.map(c => (ID.get(c.n.toLowerCase()) || {}).f).filter(Boolean))];
+  const mostrate = lista.filter(c => {
+    if (f && !c.n.toLowerCase().includes(f)) return false;
+    if (!tipiAttivi.size) return true;
+    return tipiAttivi.has((ID.get(c.n.toLowerCase()) || {}).f);
+  });
+  app.innerHTML = intestazione(nome, "", true) + `
+    <div class="wrap">
+      <div class="testa">${ritrattoHTML(nome)}<div><h2>${esc(nome)}</h2>
+        <p>${lista.length ? `${lista.length} carte · ${lista.filter(c => c.r === "Rara").length} rare` : "lista non disponibile"}</p></div></div>
+      ${lista.length ? `<input class="cerca" id="q" placeholder="Filtra queste carte" value="${esc(filtro)}">
+      <div class="filtri">${presenti.map(t => `<button class="f" data-t="${esc(t)}" aria-pressed="${tipiAttivi.has(t)}">
+        <i class="pallino" style="background:${CORNICE[t]?.[1] || "#777"}"></i>${esc(CORNICE[t]?.[0] || t)}</button>`).join("")}</div>
+      <div class="carte">${mostrate.map(cartaHTML).join("")}</div>
+      ${mostrate.length ? "" : `<p class="vuoto">Nessuna carta con questi filtri.</p>`}`
+      : `<p class="vuoto">Non ho la lista di questa busta.</p>`}
+    </div>`;
+  document.getElementById("back").onclick = () => { tipiAttivi.clear(); home(); };
+  legaRicerca(v => duellante(nome, v));
+  document.querySelectorAll("[data-t]").forEach(b => b.onclick = () => {
+    const t = b.dataset.t;
+    tipiAttivi.has(t) ? tipiAttivi.delete(t) : tipiAttivi.add(t);
+    duellante(nome, filtro);
+  });
+  if (lista.length && await risolviId(lista.map(c => c.n))) duellante(nome, filtro);
 }
 
 function legaRicerca(fn) {
@@ -400,18 +397,19 @@ function legaRicerca(fn) {
 }
 
 function scheda(nome) {
-  const id = ID.get(nome.toLowerCase());
+  const d = ID.get(nome.toLowerCase()) || {};
   const dove = [];
-  for (const b of BUSTE) {
-    const c = (CARTE.get(b.titolo) || []).find(x => x.n === nome);
-    if (c) dove.push(b.nome + (c.r === "Rara" ? " · rara" : ""));
+  for (const n of NOMI) {
+    const c = (CARTE.get(n) || []).find(x => x.n === nome);
+    if (c) dove.push(n + (c.r === "Rara" ? " · rara" : ""));
   }
   const v = document.createElement("div");
   v.className = "velo";
   v.innerHTML = `<div class="scheda">
-    ${id ? `<img src="${imgGrande(id)}" alt="${esc(nome)}">` : ""}
+    ${d.i ? `<img src="${imgGrande(d.i)}" alt="${esc(nome)}">` : ""}
     <h3>${esc(nome)}</h3>
-    ${dove.length ? `<div>${dove.map(d => `<span class="chip">${esc(d)}</span>`).join("")}</div>` : ""}
+    ${d.f ? `<div class="meta">${esc(CORNICE[d.f]?.[0] || d.f)}</div>` : ""}
+    ${dove.length ? `<div>${dove.map(x => `<span class="chip">${esc(x)}</span>`).join("")}</div>` : ""}
     <button class="chiudi">Chiudi</button></div>`;
   v.onclick = () => v.remove();
   document.body.appendChild(v);
@@ -419,32 +417,35 @@ function scheda(nome) {
 
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-b]");
-  if (b) return duellante(BUSTE.find(x => x.titolo === b.dataset.b));
+  if (b) { tipiAttivi.clear(); return duellante(b.dataset.b); }
   const c = e.target.closest("[data-c]");
   if (c) return scheda(c.dataset.c);
   const t = e.target.closest("[data-v]");
   if (t) return t.dataset.v === "carte" ? ricercaCarte() : home();
 });
 
-/* ---------- avvio ---------- */
+/* ============ avvio ============ */
 async function avvia() {
   app.innerHTML = `<div class="boot"><h1>Carte per duellante</h1>
     <p class="sub">Legacy of the Duelist: Link Evolution</p>
-    <div class="barra"><i style="width:35%"></i></div>
-    <p class="caricando">Chiedo a Yugipedia l'elenco completo delle buste</p></div>`;
+    <div class="barra"><i style="width:30%"></i></div>
+    <p class="caricando">Scarico le liste delle 33 buste</p></div>`;
 
   const salvati = await DB.get("id");
   if (salvati) for (const [k, v] of salvati) ID.set(k, v);
-  tutteCaricate = !!(await DB.get("tutte"));
 
-  BUSTE = await elencoBuste() || [];
-  if (!BUSTE.length) {
-    app.innerHTML = `<div class="boot"><h1>Non arrivo ai dati</h1>
-      <p class="sub">Yugipedia non risponde. Controlla la connessione e riprova.</p>
-      <button class="azione" onclick="location.reload()">Riprova</button></div>`;
+  const ok = await caricaListe();
+  await caricaRitratti();
+
+  if (!ok) {
+    app.innerHTML = `<div class="boot"><h1>Liste non scaricate</h1>
+      <p class="sub">La fonte delle liste carte non ha risposto. Riprova fra poco:
+      i duellanti restano visibili, ma senza carte dentro.</p>
+      <button class="azione" onclick="location.reload()">Riprova</button>
+      <button class="azione second" id="cosi">Continua così</button></div>`;
+    document.getElementById("cosi").onclick = () => home();
     return;
   }
-  if (tutteCaricate) for (const b of BUSTE) await carteDi(b.titolo);
   home();
 }
 avvia();
