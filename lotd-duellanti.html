@@ -35,10 +35,10 @@
   .cerca:focus{border-color:var(--gold-dim)}
   .cerca::placeholder{color:var(--muted)}
   .tabs{display:flex;gap:6px;margin:14px 0 0}
-  .tab{flex:1;padding:9px 8px;border:1px solid var(--line);border-radius:8px;color:var(--muted);font-size:14px}
+  .tab{flex:1;padding:9px 6px;border:1px solid var(--line);border-radius:8px;color:var(--muted);font-size:13.5px}
   .tab[aria-selected="true"]{color:#1a1626;background:var(--gold);border-color:var(--gold);font-weight:600}
 
-  .serie{font-size:12.5px;color:var(--muted);margin:18px 0 7px;letter-spacing:.3px}
+  .serie{font-size:12.5px;color:var(--muted);margin:18px 0 7px}
   .duellanti{display:grid;gap:8px}
   .duel{display:flex;gap:12px;align-items:center;padding:8px;background:var(--panel);
     border:1px solid var(--line);border-radius:var(--r);width:100%;text-align:left}
@@ -49,7 +49,7 @@
   .duel .nome{font-size:16px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .duel small{color:var(--muted);font-size:12.5px}
 
-  .filtri{display:flex;gap:6px;overflow-x:auto;padding:2px 0 10px;-webkit-overflow-scrolling:touch}
+  .filtri{display:flex;gap:6px;overflow-x:auto;padding:2px 0 10px}
   .f{flex:none;padding:6px 11px;border:1px solid var(--line);border-radius:99px;font-size:13px;color:var(--muted);
     display:flex;align-items:center;gap:6px;white-space:nowrap}
   .f[aria-pressed="true"]{color:var(--text);border-color:var(--gold);background:var(--panel2)}
@@ -79,11 +79,12 @@
   .chip{display:inline-block;padding:2px 8px;margin:5px 5px 0 0;border:1px solid var(--gold-dim);
     border-radius:99px;font-size:11.5px;color:var(--gold)}
 
-  .velo{position:fixed;inset:0;z-index:40;background:rgba(10,8,16,.9);display:grid;place-items:center;padding:20px}
+  .velo{position:fixed;inset:0;z-index:40;background:rgba(10,8,16,.9);display:grid;place-items:center;padding:20px;
+    overflow:auto}
   .scheda{max-width:320px;width:100%;text-align:center}
   .scheda img{width:100%;border-radius:8px}
   .scheda h3{margin:12px 0 4px;font-size:18px}
-  .scheda .meta{color:var(--muted);font-size:13px}
+  .scheda .meta{color:var(--muted);font-size:13px;margin-top:4px}
   .chiudi{margin-top:14px;padding:9px 22px;border:1px solid var(--line);border-radius:8px;color:var(--muted)}
 
   .boot{min-height:100dvh;display:flex;flex-direction:column;justify-content:center;
@@ -91,7 +92,7 @@
   .boot h1{font-size:26px;margin:0 0 6px;line-height:1.2}
   .boot .sub{color:var(--muted);margin:0 0 20px;font-size:14px}
   .barra{height:3px;background:var(--panel2);border-radius:2px;overflow:hidden;margin:6px 0 18px}
-  .barra i{display:block;height:100%;width:0;background:var(--gold);transition:width .25s}
+  .barra i{display:block;height:100%;width:0;background:var(--gold);transition:width .3s}
   .azione{display:block;width:100%;padding:12px;background:var(--gold);color:#1a1626;border-radius:var(--r);
     font-weight:600;margin-top:10px;text-align:center}
   .azione.second{background:none;border:1px solid var(--line);color:var(--text);font-weight:500}
@@ -106,7 +107,7 @@
 <script>
 "use strict";
 
-/* ============ buste del Card Shop, per serie ============ */
+/* ================= buste del Card Shop ================= */
 const SERIE = [
   ["Duel Monsters", ["Grandpa Muto", "Mai Valentine", "Bakura", "Joey Wheeler", "Seto Kaiba", "Yugi"]],
   ["GX", ["Alexis Rhodes", "Bastion Misawa", "Chazz Princeton", "Syrus Truesdale", "Jesse Anderson", "Jaden Yuki"]],
@@ -115,34 +116,35 @@ const SERIE = [
   ["ARC-V", ["Gong Strong", "Zuzu Boyle", "Shay", "Declan Akaba", "Yuya Sakaki"]],
   ["VRAINS", ["Playmaker", "Blue Angel", "Soulburner", "Varis", "Ai"]]
 ];
-const NOMI = SERIE.flatMap(s => s[1]);
+const CANONICI = SERIE.flatMap(s => s[1]);
 const PAGINA = {
-  "Yugi": "Yugi Muto", "Bakura": "Bakura", "Shark": "Reginald Kastle", "Crow": "Crow Hogan",
-  "Leo/Luna": "Leo", "Quinton": "Quinton", "Ai": "Ai (character)", "Varis": "Varis",
-  "Playmaker": "Yusaku Fujiki", "Blue Angel": "Aoi Zaizen", "Soulburner": "Takeru Homura",
-  "Grandpa Muto": "Solomon Muto", "Gong Strong": "Gong Strong", "Shay": "Shay Obsidian"
+  "Yugi": "Yugi Muto", "Grandpa Muto": "Solomon Muto", "Shark": "Reginald Kastle",
+  "Crow": "Crow Hogan", "Leo/Luna": "Leo", "Playmaker": "Yusaku Fujiki",
+  "Blue Angel": "Aoi Zaizen", "Soulburner": "Takeru Homura", "Ai": "Ai (character)"
 };
+const chiave = s => String(s).toLowerCase().replace(/booster\s*pack|\bpack\b/g, "").replace(/[^a-z0-9]/g, "");
+const MAPPA = new Map(CANONICI.map(n => [chiave(n), n]));
 
-/* colori delle cornici */
 const CORNICE = {
   normal: ["Mostro normale", "#c9a86b"], effect: ["Mostro effetto", "#c47b3f"],
   ritual: ["Rituale", "#5a7fc4"], fusion: ["Fusione", "#8a5fb0"],
   synchro: ["Synchro", "#d8d4cc"], xyz: ["Xyz", "#2f2c38"],
   link: ["Link", "#2e6fa3"], spell: ["Magia", "#2e9b8f"], trap: ["Trappola", "#b8447f"],
   normal_pendulum: ["Pendulum", "#5fa87a"], effect_pendulum: ["Pendulum", "#5fa87a"],
+  fusion_pendulum: ["Pendulum", "#5fa87a"], synchro_pendulum: ["Pendulum", "#5fa87a"],
+  xyz_pendulum: ["Pendulum", "#5fa87a"], ritual_pendulum: ["Pendulum", "#5fa87a"],
   token: ["Token", "#8d8a96"], skill: ["Skill", "#8d8a96"]
 };
-const gruppo = f => (f || "").replace(/_pendulum$/, "_pendulum").replace(/^(xyz|synchro|fusion|ritual)_pendulum$/, "$1");
 
-/* ============ archivio locale ============ */
+/* ================= archivio locale ================= */
 const DB = (() => {
   let p;
   const open = () => p || (p = new Promise((res, rej) => {
-    const r = indexedDB.open("lotd-le4", 1);
+    const r = indexedDB.open("lotd-le5", 1);
     r.onupgradeneeded = () => r.result.createObjectStore("kv");
     r.onsuccess = () => res(r.result);
     r.onerror = () => rej(r.error);
-    setTimeout(() => rej(new Error("timeout")), 4000);
+    setTimeout(() => rej(new Error("timeout")), 5000);
   }));
   const tx = async (mode, fn) => {
     try {
@@ -156,19 +158,15 @@ const DB = (() => {
   return { get: k => tx("readonly", s => s.get(k)), set: (k, v) => tx("readwrite", s => s.put(v, k)) };
 })();
 
-/* ============ rete ============ */
-async function testo(url, tempo = 25000) {
-  const vie = [
-    "https://api.allorigins.win/raw?url=" + encodeURIComponent(url),
-    "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(url),
-    "https://corsproxy.io/?url=" + encodeURIComponent(url)
-  ];
+/* ================= rete ================= */
+async function prendiTesto(url, tempo = 40000) {
+  const vie = [url, "https://api.allorigins.win/raw?url=" + encodeURIComponent(url)];
   for (const v of vie) {
     try {
       const c = new AbortController(), t = setTimeout(() => c.abort(), tempo);
       const r = await fetch(v, { signal: c.signal });
       clearTimeout(t);
-      if (r.ok) { const s = await r.text(); if (s && s.length > 2000) return s; }
+      if (r.ok) { const s = await r.text(); if (s && s.length > 5000) return s; }
     } catch (e) {}
   }
   return null;
@@ -183,48 +181,91 @@ async function json(url, tempo = 15000) {
   return null;
 }
 
-/* ============ liste carte ============ */
-const GUIDA = "https://gamefaqs.gamespot.com/pc/280088-yu-gi-oh-legacy-of-the-duelist-link-evolution/faqs/79850";
-const CARTE = new Map();   // nome busta -> [{n, r}]
-const ID = new Map();      // nome carta -> {i: id, f: frameType}
+/* ================= foglio dati ================= */
+const FOGLIO = "19tRadwIu9HH8nKa81Vk4XJSmZdwCy5k2pyACB6ma0yo";
+const urlFoglio = nome => `https://docs.google.com/spreadsheets/d/${FOGLIO}/gviz/tq?tqx=out:csv` +
+  (nome ? "&sheet=" + encodeURIComponent(nome) : "");
 
-function analizza(html) {
-  const doc = new DOMParser().parseFromString(html, "text/html");
-  const t = (doc.body ? doc.body.textContent : html).split(/\r?\n/);
-  const out = new Map();
-  let busta = null;
+function leggiCsv(t) {
+  const righe = []; let r = [], c = "", q = false;
   for (let i = 0; i < t.length; i++) {
-    const l = t[i].trim();
-    if (/^={6,}$/.test(l) && /pack\s*$/i.test((t[i + 1] || "").trim()) && /^={6,}$/.test((t[i + 2] || "").trim())) {
-      busta = t[i + 1].trim().replace(/\s+pack\s*$/i, "");
-      if (!out.has(busta)) out.set(busta, []);
-      i += 2;
-      continue;
-    }
-    if (!busta) continue;
-    const m = l.match(/^"(.+)"\s*(Rare)?$/i);
-    if (m) out.get(busta).push({ n: m[1].trim(), r: m[2] ? "Rara" : "Comune" });
+    const ch = t[i];
+    if (q) {
+      if (ch === '"') { if (t[i + 1] === '"') { c += '"'; i++; } else q = false; }
+      else c += ch;
+    } else if (ch === '"') q = true;
+    else if (ch === ",") { r.push(c); c = ""; }
+    else if (ch === "\n") { r.push(c); righe.push(r); r = []; c = ""; }
+    else if (ch !== "\r") c += ch;
   }
-  for (const [k, v] of [...out]) if (v.length < 5) out.delete(k);
-  return out;
+  if (c.length || r.length) { r.push(c); righe.push(r); }
+  return righe;
 }
 
-async function caricaListe() {
-  const salvate = await DB.get("liste");
-  if (salvate && salvate.length > 20) {
-    for (const [k, v] of salvate) CARTE.set(k, v);
+const BUSTE = new Map();    // nome busta -> [{n, r}]
+const DUELLI = new Map();   // duellante -> [{n, r}]
+const INFO = new Map();     // nome carta -> {a: alt, d: duello}
+const ID = new Map();       // nome carta -> {i, f}
+
+function costruisci(righe) {
+  const testa = righe[0].map(h => h.toLowerCase().replace(/[^a-z?]/g, ""));
+  const col = (...nomi) => { for (const n of nomi) { const i = testa.indexOf(n); if (i > -1) return i; } return -1; };
+  const iN = col("cardname", "cleanname");
+  if (iN < 0) return false;
+  const iP = col("linkevolutionlocation", "packname");
+  const iR = col("rare?", "rare", "rarity");
+  const iA = col("linkevolutionalternatelocation", "alternatelocation");
+  const iD = col("duelagainst");
+  let contate = 0;
+
+  for (const r of righe.slice(1)) {
+    const n = (r[iN] || "").trim();
+    if (!n) continue;
+    const grezzo = (r[iP] || "").trim();
+    if (!grezzo || /not in the game/i.test(grezzo)) continue;
+    const v = (r[iR] || "").trim();
+    const rar = (v && !/^(no|false|0|n)$/i.test(v)) ? "Rara" : "Comune";
+    const busta = MAPPA.get(chiave(grezzo)) || grezzo.replace(/\s*booster pack\s*/i, "").trim();
+    if (!BUSTE.has(busta)) BUSTE.set(busta, []);
+    BUSTE.get(busta).push({ n, r: rar });
+    contate++;
+
+    const alt = iA > -1 ? (r[iA] || "").trim() : "";
+    const duello = iD > -1 ? (r[iD] || "").trim() : "";
+    if (!INFO.has(n)) INFO.set(n, { a: alt, d: duello });
+    if (duello) {
+      for (let x of duello.split(/\s*[,;]\s*|\n/)) {
+        x = x.trim(); if (!x || /^(n\/?a|-|none)$/i.test(x)) continue;
+        if (x.includes(">")) x = x.split(">").pop().trim();
+        if (!DUELLI.has(x)) DUELLI.set(x, []);
+        DUELLI.get(x).push({ n, r: rar });
+      }
+    }
+  }
+  return contate > 1000;
+}
+
+async function caricaDati() {
+  const salvati = await DB.get("dati");
+  if (salvati) {
+    for (const [k, v] of salvati.b) BUSTE.set(k, v);
+    for (const [k, v] of salvati.d) DUELLI.set(k, v);
+    for (const [k, v] of salvati.i) INFO.set(k, v);
     return true;
   }
-  const html = await testo(GUIDA);
-  if (!html) return false;
-  const mappa = analizza(html);
-  if (mappa.size < 10) return false;
-  for (const [k, v] of mappa) CARTE.set(k, v);
-  DB.set("liste", [...mappa.entries()]);
-  return true;
+  for (const foglio of ["Card Master List", "Card Info", null]) {
+    const t = await prendiTesto(urlFoglio(foglio));
+    if (!t) continue;
+    BUSTE.clear(); DUELLI.clear(); INFO.clear();
+    if (costruisci(leggiCsv(t))) {
+      DB.set("dati", { b: [...BUSTE], d: [...DUELLI], i: [...INFO] });
+      return true;
+    }
+  }
+  return false;
 }
 
-/* ============ immagini e tipo carta ============ */
+/* ================= immagini e tipo ================= */
 const img = id => `https://images.ygoprodeck.com/images/cards_small/${id}.jpg`;
 const imgGrande = id => `https://images.ygoprodeck.com/images/cards/${id}.jpg`;
 
@@ -242,12 +283,12 @@ async function risolviId(nomi) {
   return true;
 }
 
-/* ============ ritratti ============ */
+/* ================= ritratti ================= */
 const RITRATTO = new Map();
 async function caricaRitratti() {
   const salvati = await DB.get("ritratti");
   if (salvati) { for (const [k, v] of salvati) RITRATTO.set(k, v); return; }
-  const titoli = NOMI.map(n => PAGINA[n] || n);
+  const titoli = CANONICI.map(n => PAGINA[n] || n);
   for (let i = 0; i < titoli.length; i += 20) {
     const d = await json("https://yugipedia.com/api.php?" + new URLSearchParams({
       action: "query", format: "json", formatversion: "2", origin: "*", redirects: "1",
@@ -261,11 +302,11 @@ async function caricaRitratti() {
 }
 const ritrattoDi = n => RITRATTO.get(PAGINA[n] || n) || "";
 
-/* ============ interfaccia ============ */
+/* ================= interfaccia ================= */
 const app = document.getElementById("app");
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const iniziali = n => n.split(/[\s\/]+/).slice(0, 2).map(w => w[0] || "").join("").toUpperCase();
-let tipiAttivi = new Set();
+let tipiAttivi = new Set(), vista = "buste";
 
 function ritrattoHTML(nome, cls = "ritratto") {
   const u = ritrattoDi(nome);
@@ -288,42 +329,66 @@ const intestazione = (t, conta, indietro) => `<header class="top"><div class="to
   <h1 class="titolo">${esc(t)}</h1>
   ${conta ? `<span class="conta">${esc(conta)}</span>` : ""}</div></header>`;
 
+const barraTab = () => `<div class="tabs">
+  <button class="tab" aria-selected="${vista === "buste"}" data-v="buste">Buste</button>
+  ${DUELLI.size > 2 ? `<button class="tab" aria-selected="${vista === "duelli"}" data-v="duelli">Duelli</button>` : ""}
+  <button class="tab" aria-selected="${vista === "cerca"}" data-v="cerca">Cerca</button></div>`;
+
+function rigaDuellante(nome, lista, conRitratto) {
+  return `<button class="duel" data-b="${esc(nome)}">${conRitratto ? ritrattoHTML(nome)
+      : `<div class="ritratto iniziali">${esc(iniziali(nome))}</div>`}
+    <span style="min-width:0"><span class="nome">${esc(nome)}</span>
+    <small>${lista ? lista.length + " carte" : "nessuna carta"}</small></span></button>`;
+}
+
 function home(filtro = "") {
   const f = filtro.trim().toLowerCase();
-  const totale = [...CARTE.values()].reduce((a, b) => a + b.length, 0);
+  const totale = [...BUSTE.values()].reduce((a, b) => a + b.length, 0);
   let corpo = "";
   for (const [serie, nomi] of SERIE) {
     const el = nomi.filter(n => !f || n.toLowerCase().includes(f));
     if (!el.length) continue;
-    corpo += `<p class="serie">${esc(serie)}</p><div class="duellanti">` + el.map(n => {
-      const lista = CARTE.get(n);
-      return `<button class="duel" data-b="${esc(n)}">${ritrattoHTML(n)}
-        <span style="min-width:0"><span class="nome">${esc(n)}</span>
-        <small>${lista ? lista.length + " carte" : "lista non disponibile"}</small></span></button>`;
-    }).join("") + `</div>`;
+    corpo += `<p class="serie">${esc(serie)}</p><div class="duellanti">` +
+      el.map(n => rigaDuellante(n, BUSTE.get(n), true)).join("") + `</div>`;
   }
-  app.innerHTML = intestazione("Legacy of the Duelist: Link Evolution", totale ? totale + " carte" : "") + `
-    <div class="wrap">
-      <div class="tabs">
-        <button class="tab" aria-selected="true" data-v="duellanti">Duellanti</button>
-        <button class="tab" aria-selected="false" data-v="carte">Cerca una carta</button>
-      </div>
-      <input class="cerca" id="q" placeholder="Cerca un duellante" value="${esc(filtro)}">
-      ${corpo || `<p class="vuoto">Nessun duellante con questo nome.</p>`}
+  const altre = [...BUSTE.keys()].filter(k => !MAPPA.has(chiave(k)))
+    .filter(k => BUSTE.get(k).length >= 3 && (!f || k.toLowerCase().includes(f)))
+    .sort((a, b) => BUSTE.get(b).length - BUSTE.get(a).length).slice(0, 120);
+  if (altre.length) corpo += `<p class="serie">Altre provenienze</p><div class="duellanti">` +
+    altre.map(n => rigaDuellante(n, BUSTE.get(n), false)).join("") + `</div>`;
+
+  app.innerHTML = intestazione("Legacy of the Duelist: Link Evolution", totale + " carte") + `
+    <div class="wrap">${barraTab()}
+      <input class="cerca" id="q" placeholder="Cerca una busta" value="${esc(filtro)}">
+      ${corpo || `<p class="vuoto">Nessun risultato.</p>`}
     </div>`;
   legaRicerca(v => home(v));
+}
+
+function elencoDuelli(filtro = "") {
+  const f = filtro.trim().toLowerCase();
+  const el = [...DUELLI.keys()].filter(k => !f || k.toLowerCase().includes(f))
+    .sort((a, b) => DUELLI.get(b).length - DUELLI.get(a).length);
+  app.innerHTML = intestazione("Carte che si vincono in duello", DUELLI.size + " duellanti") + `
+    <div class="wrap">${barraTab()}
+      <input class="cerca" id="q" placeholder="Cerca un duellante" value="${esc(filtro)}">
+      ${el.length ? `<div class="duellanti">${el.slice(0, 200)
+        .map(n => rigaDuellante(n, DUELLI.get(n), false)).join("")}</div>`
+        : `<p class="vuoto">Nessun duellante con questo nome.</p>`}
+    </div>`;
+  legaRicerca(v => elencoDuelli(v));
 }
 
 function ricercaCarte(filtro = "") {
   const f = filtro.trim().toLowerCase();
   let corpo;
-  if (!f) corpo = `<p class="vuoto">Scrivi il nome di una carta per vedere in quali buste si trova.</p>`;
+  if (!f) corpo = `<p class="vuoto">Scrivi il nome di una carta per vedere dove si trova.</p>`;
   else {
     const trovate = new Map();
-    for (const n of NOMI) for (const c of (CARTE.get(n) || []))
+    for (const [busta, lista] of BUSTE) for (const c of lista)
       if (c.n.toLowerCase().includes(f)) {
         if (!trovate.has(c.n)) trovate.set(c.n, []);
-        trovate.get(c.n).push(n + (c.r === "Rara" ? " · rara" : ""));
+        trovate.get(c.n).push(busta + (c.r === "Rara" ? " · rara" : ""));
       }
     const el = [...trovate.entries()].slice(0, 50);
     corpo = el.length ? el.map(([n, dove]) => {
@@ -333,27 +398,18 @@ function ricercaCarte(filtro = "") {
         <span style="min-width:0"><span class="nome">${esc(n)}</span>
         <div>${dove.map(x => `<span class="chip">${esc(x)}</span>`).join("")}</div></span></button>`;
     }).join("") : `<p class="vuoto">Nessuna carta trovata.</p>`;
+    const nomi = [...trovate.keys()].slice(0, 50);
+    risolviId(nomi).then(ok => ok && vista === "cerca" && ricercaCarte(filtro));
   }
   app.innerHTML = intestazione("Legacy of the Duelist: Link Evolution") + `
-    <div class="wrap">
-      <div class="tabs">
-        <button class="tab" aria-selected="false" data-v="duellanti">Duellanti</button>
-        <button class="tab" aria-selected="true" data-v="carte">Cerca una carta</button>
-      </div>
+    <div class="wrap">${barraTab()}
       <input class="cerca" id="q" placeholder="Cerca una carta" value="${esc(filtro)}">
-      ${corpo}
-    </div>`;
+      ${corpo}</div>`;
   legaRicerca(v => ricercaCarte(v));
-  if (f) {
-    const nomi = [];
-    for (const n of NOMI) for (const c of (CARTE.get(n) || []))
-      if (c.n.toLowerCase().includes(f)) nomi.push(c.n);
-    risolviId(nomi.slice(0, 50)).then(ok => ok && ricercaCarte(filtro));
-  }
 }
 
-async function duellante(nome, filtro = "") {
-  const lista = CARTE.get(nome) || [];
+async function dettaglio(nome, filtro = "") {
+  const lista = BUSTE.get(nome) || DUELLI.get(nome) || [];
   const f = filtro.trim().toLowerCase();
   const presenti = [...new Set(lista.map(c => (ID.get(c.n.toLowerCase()) || {}).f).filter(Boolean))];
   const mostrate = lista.filter(c => {
@@ -364,22 +420,21 @@ async function duellante(nome, filtro = "") {
   app.innerHTML = intestazione(nome, "", true) + `
     <div class="wrap">
       <div class="testa">${ritrattoHTML(nome)}<div><h2>${esc(nome)}</h2>
-        <p>${lista.length ? `${lista.length} carte · ${lista.filter(c => c.r === "Rara").length} rare` : "lista non disponibile"}</p></div></div>
-      ${lista.length ? `<input class="cerca" id="q" placeholder="Filtra queste carte" value="${esc(filtro)}">
+        <p>${lista.length} carte · ${lista.filter(c => c.r === "Rara").length} rare</p></div></div>
+      <input class="cerca" id="q" placeholder="Filtra queste carte" value="${esc(filtro)}">
       <div class="filtri">${presenti.map(t => `<button class="f" data-t="${esc(t)}" aria-pressed="${tipiAttivi.has(t)}">
         <i class="pallino" style="background:${CORNICE[t]?.[1] || "#777"}"></i>${esc(CORNICE[t]?.[0] || t)}</button>`).join("")}</div>
       <div class="carte">${mostrate.map(cartaHTML).join("")}</div>
-      ${mostrate.length ? "" : `<p class="vuoto">Nessuna carta con questi filtri.</p>`}`
-      : `<p class="vuoto">Non ho la lista di questa busta.</p>`}
+      ${mostrate.length ? "" : `<p class="vuoto">Nessuna carta con questi filtri.</p>`}
     </div>`;
-  document.getElementById("back").onclick = () => { tipiAttivi.clear(); home(); };
-  legaRicerca(v => duellante(nome, v));
+  document.getElementById("back").onclick = () => { tipiAttivi.clear(); vista === "duelli" ? elencoDuelli() : home(); };
+  legaRicerca(v => dettaglio(nome, v));
   document.querySelectorAll("[data-t]").forEach(b => b.onclick = () => {
     const t = b.dataset.t;
     tipiAttivi.has(t) ? tipiAttivi.delete(t) : tipiAttivi.add(t);
-    duellante(nome, filtro);
+    dettaglio(nome, filtro);
   });
-  if (lista.length && await risolviId(lista.map(c => c.n))) duellante(nome, filtro);
+  if (lista.length && await risolviId(lista.map(c => c.n))) dettaglio(nome, filtro);
 }
 
 function legaRicerca(fn) {
@@ -397,19 +452,18 @@ function legaRicerca(fn) {
 }
 
 function scheda(nome) {
-  const d = ID.get(nome.toLowerCase()) || {};
+  const d = ID.get(nome.toLowerCase()) || {}, inf = INFO.get(nome) || {};
   const dove = [];
-  for (const n of NOMI) {
-    const c = (CARTE.get(n) || []).find(x => x.n === nome);
-    if (c) dove.push(n + (c.r === "Rara" ? " · rara" : ""));
-  }
+  for (const [busta, lista] of BUSTE) if (lista.some(x => x.n === nome)) dove.push(busta);
   const v = document.createElement("div");
   v.className = "velo";
   v.innerHTML = `<div class="scheda">
     ${d.i ? `<img src="${imgGrande(d.i)}" alt="${esc(nome)}">` : ""}
     <h3>${esc(nome)}</h3>
     ${d.f ? `<div class="meta">${esc(CORNICE[d.f]?.[0] || d.f)}</div>` : ""}
-    ${dove.length ? `<div>${dove.map(x => `<span class="chip">${esc(x)}</span>`).join("")}</div>` : ""}
+    ${dove.length ? `<div>${dove.slice(0, 6).map(x => `<span class="chip">${esc(x)}</span>`).join("")}</div>` : ""}
+    ${inf.d ? `<div class="meta">Si vince contro: ${esc(inf.d)}</div>` : ""}
+    ${inf.a ? `<div class="meta">Anche in: ${esc(inf.a)}</div>` : ""}
     <button class="chiudi">Chiudi</button></div>`;
   v.onclick = () => v.remove();
   document.body.appendChild(v);
@@ -417,33 +471,33 @@ function scheda(nome) {
 
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-b]");
-  if (b) { tipiAttivi.clear(); return duellante(b.dataset.b); }
+  if (b) { tipiAttivi.clear(); return dettaglio(b.dataset.b); }
   const c = e.target.closest("[data-c]");
   if (c) return scheda(c.dataset.c);
   const t = e.target.closest("[data-v]");
-  if (t) return t.dataset.v === "carte" ? ricercaCarte() : home();
+  if (t) {
+    vista = t.dataset.v;
+    return vista === "cerca" ? ricercaCarte() : vista === "duelli" ? elencoDuelli() : home();
+  }
 });
 
-/* ============ avvio ============ */
+/* ================= avvio ================= */
 async function avvia() {
   app.innerHTML = `<div class="boot"><h1>Carte per duellante</h1>
     <p class="sub">Legacy of the Duelist: Link Evolution</p>
-    <div class="barra"><i style="width:30%"></i></div>
-    <p class="caricando">Scarico le liste delle 33 buste</p></div>`;
+    <div class="barra"><i style="width:25%"></i></div>
+    <p class="caricando">Scarico l'archivio completo delle carte. La prima volta richiede qualche secondo.</p></div>`;
 
   const salvati = await DB.get("id");
   if (salvati) for (const [k, v] of salvati) ID.set(k, v);
 
-  const ok = await caricaListe();
+  const ok = await caricaDati();
   await caricaRitratti();
 
   if (!ok) {
-    app.innerHTML = `<div class="boot"><h1>Liste non scaricate</h1>
-      <p class="sub">La fonte delle liste carte non ha risposto. Riprova fra poco:
-      i duellanti restano visibili, ma senza carte dentro.</p>
-      <button class="azione" onclick="location.reload()">Riprova</button>
-      <button class="azione second" id="cosi">Continua così</button></div>`;
-    document.getElementById("cosi").onclick = () => home();
+    app.innerHTML = `<div class="boot"><h1>Archivio non raggiungibile</h1>
+      <p class="sub">Il foglio dati non ha risposto. Di solito è un problema momentaneo di connessione.</p>
+      <button class="azione" onclick="location.reload()">Riprova</button></div>`;
     return;
   }
   home();
