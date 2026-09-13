@@ -126,8 +126,21 @@ await T('dove trovarle', async () => {
   ok('lista copiata negli appunti', cl.includes('Dove trovare le carte'), cl.slice(0, 60));
 });
 
-await T('esportazione', async () => {
+await T('ritorno dalla lista della spesa', async () => {
+  // il test precedente lascia aperta la lista della spesa
+  if ((await txt('.titolo')) !== 'Dove trovarle') {
+    await page.click('[data-az="spesa"]'); await page.waitForSelector('.riga-fonte');
+  }
+  await page.click('.riga-fonte'); await page.waitForSelector('.testa');
+  ok('si apre il luogo', (await txt('.titolo')).length > 0);
+  await page.click('[data-az="indietro"]'); await page.waitForTimeout(250);
+  ok('Indietro riporta alla lista della spesa', (await txt('.titolo')) === 'Dove trovarle', await txt('.titolo'));
   await page.click('[data-az="indietro"]'); await page.waitForTimeout(200);
+  ok('e poi al mazzo', (await txt('.titolo')) === 'Mazzo di Yugi', await txt('.titolo'));
+});
+
+await T('esportazione', async () => {
+  while ((await txt('.titolo')) !== 'Mazzo di Yugi') { await page.click('[data-az="indietro"]'); await page.waitForTimeout(200); }
   await page.click('[data-az="esporta"]'); await page.waitForTimeout(200);
   const t = await page.inputValue('#esp');
   ok('intestazione con nome ed epoca', t.includes('# Mazzo di Yugi') && t.includes('# Epoca: Duel Monsters'), t.slice(0,60));
@@ -139,8 +152,8 @@ await T('esportazione', async () => {
 });
 
 await T('persistenza e ripristino epoca', async () => {
-  await page.click('[data-az="indietro"]'); await page.waitForTimeout(150);
-  await page.click('[data-az="indietro"]'); await page.waitForTimeout(250);
+  await page.click('[data-az="indietro"]'); await page.waitForTimeout(200);  // esporta -> mazzo
+  await page.click('[data-az="indietro"]'); await page.waitForTimeout(300);  // mazzo -> elenco
   ok('uscendo dal mazzo torna a Mazzi', (await txt('.titolo')).includes('ricette'), await txt('.titolo'));
   ok('epoca ripristinata a "tutto il gioco"', (await txt('.epoca-barra .val')).includes('Tutto il gioco'),
      await txt('.epoca-barra .val'));

@@ -134,10 +134,16 @@ def interna(lst, idx, v):
     return idx[v]
 
 CARTE, note = [], collections.Counter()
+gia_viste = {}          # nome -> indice in CARTE
 for r in righe:
     dove = r["Link Evolution Location"].strip()
     if not dove or re.search(r"not in the game", dove, re.I): continue
     nome, cid = r["Card Name"].strip(), r["Card ID"].strip()
+    if nome in gia_viste:
+        # il foglio contiene righe ripetute: si fondono le fonti, non si duplica la carta
+        note["riga ripetuta"] += 1
+        precedente = CARTE[gia_viste[nome]]
+        continue
     c = per_id.get(cid) or per_nome.get(normalizza(nome))
     if not c:                                    # i 9 refusi del foglio
         g = difflib.get_close_matches(normalizza(nome), chiavi_nome, n=1, cutoff=0.8)
@@ -181,6 +187,7 @@ for r in righe:
     cornice = c.get("frameType", "")
     t = max(tacca(date[0]), PAVIMENTO.get(cornice, 0)) if date else -1
     if not date: note["senza data"] += 1
+    gia_viste[nome] = len(CARTE)
     CARTE.append([
         nome,
         int(c["card_images"][0]["id"]) if c.get("card_images") else int(c["id"]),
@@ -194,11 +201,6 @@ for r in righe:
 conta_fonte = collections.Counter(i for c in CARTE for i in c[7])
 for i, l in enumerate(LUOGHI):
     if l["tipo"] != "busta": l["taglia"] = conta_fonte[i]
-
-# la rarita' non e' registrata per le buste DLC: zero rare non e' "nessuna rara"
-rare_busta = collections.Counter(c[6] for c in CARTE if c[5])
-for i, l in enumerate(LUOGHI):
-    if l["tipo"] == "busta": l["rarNota"] = rare_busta[i] > 1
 
 # ---------------------------------------------------------------- ritratti
 # I ritratti dei 33 duellanti da yugipedia: si scaricano una volta e si
@@ -240,13 +242,14 @@ print("ritratti:", len(RITRATTI), "su", len(CANON))
 buste = [l for l in LUOGHI if l["tipo"] == "busta"]
 assert len(buste) == 33, f"buste attese 33, trovate {len(buste)}"
 assert all(l["taglia"] > 0 for l in buste), "una busta e' rimasta vuota: alias mancante?"
+assert len({c[0] for c in CARTE}) == len(CARTE), "nomi di carta duplicati nell'indice"
 assert not note["SENZA CORRISPONDENZA"] and not note["BUSTA SCONOSCIUTA"], dict(note)
 assert len(TACCHE) == 25, f"tacche attese 25, trovate {len(TACCHE)}"
 
 cum, tot = [], 0
 isto = collections.Counter(c[3] for c in CARTE)
 for i in range(len(TACCHE)): tot += isto[i]; cum.append(tot)
-attesi = {5: 2020, 9: 3154, 13: 4821, 17: 6354, 21: 8300, 24: 10027}
+attesi = {5: 2020, 9: 3154, 13: 4821, 17: 6354, 21: 8300, 24: 10026}
 for i, v in attesi.items():
     assert cum[i] == v, f"cumulata tacca {i}: attesa {v}, calcolata {cum[i]}"
 

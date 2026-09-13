@@ -5,10 +5,16 @@
    così non può capitare che una schermata resti senza filtro visibile.
    ===================================================================== */
 
-const intestazione = (titolo, conta, indietro) => `<header class="top"><div class="top-in">
-  ${indietro ? `<button class="indietro" data-az="indietro" aria-label="Indietro">‹</button>` : ""}
-  <h1 class="titolo">${esc(titolo)}</h1>
-  ${conta ? `<span class="conta">${esc(conta)}</span>` : ""}</div></header>`;
+/* La barra dell'epoca sta DENTRO l'intestazione fissa: in fondo a una griglia
+   di 314 carte dev'essere raggiungibile senza risalire tutta la pagina. */
+const intestazione = (titolo, conta, indietro) => `<header class="top">
+  <div class="top-in">
+    ${indietro ? `<button class="indietro" data-az="indietro" aria-label="Indietro">‹</button>` : ""}
+    <h1 class="titolo">${esc(titolo)}</h1>
+    ${conta ? `<span class="conta">${esc(conta)}</span>` : ""}
+  </div>
+  <div class="top-epoca">${barraEpoca()}</div>
+</header>`;
 
 function barraEpoca() {
   const m = mazzoAperto();
@@ -31,10 +37,12 @@ function barraEpoca() {
 function pannelloEpoca() {
   const cur = STATO.cursore, t = TACCHE[cur], sagaCur = t.s;
   const nota = dentroSaga(cur);
-  const annoCur = ANNI.findIndex(x => x.i >= cur);
-  const prima = annoCur > 0 ? ANNI[annoCur - 1] : null;
-  const dopo = annoCur >= 0 && annoCur < ANNI.length - 1 ? ANNI[annoCur + 1] : null;
-  const qui = annoCur >= 0 ? ANNI[annoCur] : ANNI[ANNI.length - 1];
+  /* Lo stepper cammina sulle tacche "fine anno". Se il cursore sta su un
+     confine di saga (aprile/maggio) quella tacca non è fra queste: si prendono
+     la precedente e la successiva vere, altrimenti si salterebbe un anno. */
+  const prima = [...ANNI].reverse().find(x => x.i < cur) || null;
+  const dopo = ANNI.find(x => x.i > cur) || null;
+  const qui = t.fs && !t.d.endsWith("-01-01") ? SAGHE[t.s].nome : String(t.a);
   const nuove = novitaSaga(sagaCur);
 
   /* il righello è solo disegno: non è tappabile. Le 21 tacche anno starebbero
@@ -55,12 +63,13 @@ function pannelloEpoca() {
     ${righello}
     <div class="stepper">
       <button data-tacca="${prima ? prima.i : ""}" ${prima ? "" : "disabled"}>◀ ${prima ? prima.anno : ""}</button>
-      <b>${qui.anno}</b>
+      <b class="${t.fs && !t.d.endsWith("-01-01") ? "saga" : ""}">${esc(qui)}</b>
       <button data-tacca="${dopo ? dopo.i : ""}" ${dopo ? "" : "disabled"}>${dopo ? dopo.anno : ""} ▶</button>
     </div>
     <div class="interruttore">
       <button data-tacca="${ULTIMA}" aria-pressed="${cur >= ULTIMA && !STATO.soloNuove}">Tutto (togli il filtro)</button>
-      <button data-az="solo-nuove" aria-pressed="${STATO.soloNuove}">Solo le ${num(nuove)} nuove di ${esc(SAGHE[sagaCur].nome)}</button>
+      ${mazzoAperto() ? "" : `<button data-az="solo-nuove" aria-pressed="${STATO.soloNuove}"
+        >Solo le ${num(nuove)} nuove di ${esc(SAGHE[sagaCur].nome)}</button>`}
     </div>
   </div>`;
 }
@@ -76,15 +85,21 @@ const barraTab = () => `<div class="tabs">
    rigenerato mentre si scrive e non perde i tasti. */
 let CORPO = () => "";
 
+let ultimaSchermata = "";
 function render() {
   const y = scrollY;
+  clearTimeout(attesaRicerca);      // niente ricerche in volo che atterrano sulla schermata dopo
+  const chiave = [STATO.schermata, STATO.vista, STATO.luogo, STATO.mazzo].join("|");
   const v = schermataCorrente();
   CORPO = v.corpo;
   app.innerHTML = intestazione(v.titolo, v.conta, v.indietro) +
-    `<div class="wrap">${v.schermataPiena ? "" : barraEpoca()}${v.testa || ""}
+    `<div class="wrap">${v.testa || ""}
       <div id="corpo">${CORPO()}</div></div>`;
   aggiornaPiede();
-  scrollTo(0, y);
+  /* si resta dove si era solo se la schermata è la stessa (cambio epoca,
+     apertura del pannello); cambiando schermata si parte dall'alto */
+  scrollTo(0, chiave === ultimaSchermata ? y : 0);
+  ultimaSchermata = chiave;
 }
 function ridisegnaCorpo() {
   const el = document.getElementById("corpo");

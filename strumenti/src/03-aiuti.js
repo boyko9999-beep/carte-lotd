@@ -22,7 +22,7 @@ const DB = (() => {
   };
 })();
 
-let attesaEpoca, attesaMazzi;
+let attesaEpoca, attesaMazzi, mazziSporchi = false;
 const salvaEpoca = () => {
   clearTimeout(attesaEpoca);
   attesaEpoca = setTimeout(() => {
@@ -32,16 +32,44 @@ const salvaEpoca = () => {
   }, 400);
 };
 function salvaMazzi(subito) {
+  mazziSporchi = true;
   clearTimeout(attesaMazzi);
-  const scrivi = () => DB.set("mazzi", MAZZI).then(() => {
+  const scrivi = () => { mazziSporchi = false; return DB.set("mazzi", MAZZI).then(() => {
     if (STATO.avvisoSalvataggio) { STATO.avvisoSalvataggio = false; render(); }
   }).catch(() => {
+    mazziSporchi = true;
     if (!STATO.avvisoSalvataggio) { STATO.avvisoSalvataggio = true; render(); }
-  });
+  }); };
   if (subito) scrivi(); else attesaMazzi = setTimeout(scrivi, 300);
 }
-addEventListener("pagehide", () => salvaMazzi(true));
-addEventListener("visibilitychange", () => { if (document.hidden) salvaMazzi(true); });
+/* Con due schede aperte, quella rimasta indietro riscriverebbe l'elenco intero
+   cancellando i mazzi creati nell'altra. Si scrive solo se si è modificato
+   qualcosa, e tornando in primo piano si rilegge e si fondono le novità. */
+let CANCELLATI = [];
+async function riconciliaMazzi() {
+  const [salvati, tolti] = await Promise.all([DB.get("mazzi"), DB.get("cancellati")]);
+  if (Array.isArray(tolti)) for (const id of tolti) if (!CANCELLATI.includes(id)) CANCELLATI.push(id);
+  if (!Array.isArray(salvati)) return;
+  const miei = new Map(MAZZI.map(m => [m.id, m]));
+  let cambiato = false;
+  /* un mazzo eliminato in un'altra scheda non deve tornare in vita */
+  for (const id of CANCELLATI) if (miei.has(id)) {
+    MAZZI = MAZZI.filter(m => m.id !== id); miei.delete(id); cambiato = true;
+    if (STATO.mazzo === id) { STATO.mazzo = null; STATO.schermata = null; }
+  }
+  for (const m of salvati) {
+    if (!m || !m.id || !m.carte || CANCELLATI.includes(m.id)) continue;
+    const mio = miei.get(m.id);
+    if (!mio) { MAZZI.push(m); cambiato = true; }
+    else if ((m.modificato || 0) > (mio.modificato || 0)) { Object.assign(mio, m); cambiato = true; }
+  }
+  if (cambiato) render();
+}
+addEventListener("pagehide", () => { if (mazziSporchi) salvaMazzi(true); });
+addEventListener("visibilitychange", () => {
+  if (document.hidden) { if (mazziSporchi) salvaMazzi(true); }
+  else riconciliaMazzi();
+});
 
 /* ================= testo ================= */
 const app = document.getElementById("app");
@@ -103,8 +131,10 @@ function nomeLuogo(l) {
 function dettaglioLuogoTesto(l) {
   const L = LUOGHI[l];
   if (L.tipo === "busta") return `serie ${SAGHE[L.saga].nome} · casuale`;
-  const s = L.saga >= 0 ? `campagna ${SAGHE[L.saga].nome}` : "";
-  return [s, L.tipo === "sfida" ? "sfida" : "storia", "garantita"].filter(Boolean).join(" · ");
+  /* "sfida" e "storia" sono due sezioni diverse del gioco: non vanno chiamate
+     tutte "campagna", perché ZEXAL, ARC-V e VRAINS hanno solo sfide. */
+  const che = L.tipo === "sfida" ? "sfida" : "duello di storia";
+  return [L.saga >= 0 ? `${che} della saga ${SAGHE[L.saga].nome}` : che, "garantita"].join(" · ");
 }
 const plurale = (n, uno, tanti) => n === 1 ? uno : tanti;
 

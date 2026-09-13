@@ -73,7 +73,9 @@ function schermataCorrente() {
 
 function indietro() {
   switch (STATO.schermata) {
-    case "luogo": return vaiA({ schermata: null, luogo: null, q: "", tipiAttivi: new Set() });
+    /* si torna da dove si è arrivati: dalla lista della spesa, non alle tab */
+    case "luogo": return vaiA({ schermata: STATO.ritorno || null, luogo: null, q: "",
+      tipiAttivi: new Set(), ritorno: null });
     case "nuovo": esciDalContesto(); STATO.nomeNuovo = ""; return vaiA({ schermata: null, vista: "mazzi" });
     case "scegli": return vaiA({ schermata: "mazzo", qSel: "", tipiAttivi: new Set() });
     case "spesa": case "esporta": return vaiA({ schermata: "mazzo" });
@@ -89,19 +91,30 @@ document.addEventListener("click", e => {
   const el = s => e.target.closest(s);
   let t;
 
+  /* Raggiunto un limite, TUTTI i "+" a schermo vanno disattivati, non solo
+     quello toccato: altrimenti restano accesi e non fanno niente. */
+  const pieno = m => m ? (conta(m, false) >= 60) + "|" + (conta(m, true) >= 15) : "";
   if ((t = el("[data-piu]"))) {
     const k = +t.dataset.piu, m = mazzoAperto();
-    if (m && aggiungi(m, k)) aggiornaControllo(k);
+    if (!m) return;
+    const prima = pieno(m);
+    if (aggiungi(m, k) && pieno(m) === prima) aggiornaControllo(k);
+    else { ridisegnaCorpo(); aggiornaControllo(k); }   // anche la scheda, che vive fuori da #corpo
     return;
   }
   if ((t = el("[data-meno]"))) {
     const k = +t.dataset.meno, m = mazzoAperto();
-    if (m) { togli(m, CARTE[k][N]); aggiornaControllo(k); }
+    if (!m) return;
+    const prima = pieno(m);
+    togli(m, CARTE[k][N]);
+    if (pieno(m) === prima) aggiornaControllo(k);
+    else { ridisegnaCorpo(); aggiornaControllo(k); }
     return;
   }
   if ((t = el("[data-via]"))) { const m = mazzoAperto(); togli(m, t.dataset.via, true); return render(); }
   if ((t = el("[data-c]"))) return scheda(+t.dataset.c);
-  if ((t = el("[data-l]"))) return vaiA({ schermata: "luogo", luogo: +t.dataset.l, q: "", tipiAttivi: new Set() });
+  if ((t = el("[data-l]"))) return vaiA({ schermata: "luogo", luogo: +t.dataset.l, q: "",
+    tipiAttivi: new Set(), ritorno: STATO.schermata });
   if ((t = el("[data-g]"))) { STATO.gruppo = STATO.gruppo === t.dataset.g ? null : t.dataset.g; return ridisegnaCorpo(); }
   if ((t = el("[data-saga]"))) return impostaCursore(SAGHE[+t.dataset.saga].ultima);
   if ((t = el("[data-tacca]"))) { if (t.dataset.tacca !== "") return impostaCursore(+t.dataset.tacca); return; }
@@ -117,7 +130,7 @@ document.addEventListener("click", e => {
     return ridisegnaCorpo();
   }
   if ((t = el("[data-v]"))) {
-    STATO.soloNuove = false; STATO.gruppo = null;
+    STATO.soloNuove = false; STATO.gruppo = null; STATO.q = "";
     return vaiA({ vista: t.dataset.v, schermata: null, tipiAttivi: new Set(), pannello: false });
   }
 
@@ -127,8 +140,16 @@ document.addEventListener("click", e => {
     case "pannello": STATO.pannello = !STATO.pannello; return render();
     case "indietro": return indietro();
     case "tutto": return impostaCursore(ULTIMA);
+    case "pulisci":
+      STATO.q = ""; STATO.tipiAttivi = new Set(); STATO.nascondiFuori = false;
+      STATO.soloNuove = false; STATO.limite = 100;
+      /* l'epoca di un mazzo aperto è una sua proprietà: non si azzera per
+         sbaglio insieme ai filtri di una schermata */
+      if (!m && STATO.cursore < ULTIMA) return impostaCursore(ULTIMA);
+      return render();
     case "solo-nuove": STATO.soloNuove = !STATO.soloNuove; STATO.limite = 100; return render();
     case "altre": STATO.limite += 100; return ridisegnaCorpo();
+    case "altre-fuori": STATO.limiteFuori += 60; return ridisegnaCorpo();
     case "ordine": STATO.ordine = STATO.ordine === "epoca" ? "nome" : "epoca"; return ridisegnaCorpo();
     case "nascondi": STATO.nascondiFuori = !STATO.nascondiFuori; STATO.limite = 100; return ridisegnaCorpo();
     case "fuori": STATO.mostraFuori = !STATO.mostraFuori; STATO.limite = 100; return ridisegnaCorpo();
@@ -146,7 +167,10 @@ document.addEventListener("click", e => {
     case "allarga": m.cursore = ULTIMA; STATO.cursore = ULTIMA; salvaMazzi(); return render();
     case "elimina":
       if (!confirm("Eliminare «" + m.nome + "»? Non si può annullare.")) return;
-      MAZZI = MAZZI.filter(x => x.id !== m.id); salvaMazzi(true);
+      MAZZI = MAZZI.filter(x => x.id !== m.id);
+      CANCELLATI.push(m.id);
+      DB.set("cancellati", CANCELLATI).catch(() => {});
+      salvaMazzi(true);
       return chiudiMazzo();
     case "copia-mazzo": return copia(testoMazzo(m), t);
     case "copia-spesa": return copia(testoSpesa(m), t);
@@ -157,9 +181,12 @@ let attesaRicerca;
 document.addEventListener("input", e => {
   const q = e.target.closest("[data-q]");
   if (q) {
-    const chiave = q.dataset.q, v = q.value;
+    const chiave = q.dataset.q;
+    /* il testo entra subito nello stato (così un render lo conserva), solo il
+       ridisegno aspetta: il campo non perde mai i tasti */
+    STATO[chiave] = q.value; STATO.limite = 100;
     clearTimeout(attesaRicerca);
-    attesaRicerca = setTimeout(() => { STATO[chiave] = v; STATO.limite = 100; ridisegnaCorpo(); }, 200);
+    attesaRicerca = setTimeout(ridisegnaCorpo, 200);
     return;
   }
   if (e.target.id === "nm") { STATO.nomeNuovo = e.target.value; return; }
@@ -176,8 +203,10 @@ document.addEventListener("input", e => {
 (async function avvia() {
   const c = await DB.get("cursore");
   if (typeof c === "number" && c >= 0 && c <= ULTIMA) STATO.cursore = c;
+  const tolti = await DB.get("cancellati");
+  if (Array.isArray(tolti)) CANCELLATI = tolti;
   const m = await DB.get("mazzi");
-  if (Array.isArray(m)) MAZZI = m.filter(x => x && x.id && x.carte);
+  if (Array.isArray(m)) MAZZI = m.filter(x => x && x.id && x.carte && !CANCELLATI.includes(x.id));
   render();
 })();
 </script>

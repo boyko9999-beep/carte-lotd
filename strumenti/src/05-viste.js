@@ -135,7 +135,7 @@ function vistaLuogo() {
     ch = ordinaCarte(ch);
     const vuoto = `<p class="vuoto">Nessuna carta ${esc(etichettaFino() || "con questi filtri")} in questo posto.
       ${num(L.taglia)} in totale.<br>
-      <button class="azione second" data-az="tutto">Togli il filtro</button></p>`;
+      <button class="azione second" data-az="pulisci">Togli tutti i filtri</button></p>`;
     return chipCornici(tutte) + `
       <div class="riga-opzioni">
         <button class="f" data-az="ordine" aria-pressed="${STATO.ordine === "epoca"}">Ordina per epoca</button>
@@ -146,8 +146,10 @@ function vistaLuogo() {
   const comp = SAGHE.map((s, i) => tutte.filter(k => TACCHE[CARTE[k][T]] && TACCHE[CARTE[k][T]].s === i).length);
   const testa = L.tipo === "busta" ? ritrattoHTML(L.chi, "ritratto")
     : `<div class="saga-t" style="background:${L.saga >= 0 ? SAGHE[L.saga].colore : "#555"}">${esc(ICONA[L.tipo])}</div>`;
-  const rare = L.tipo === "busta" && !L.rarNota ? "rarità non registrata"
-    : num(RARE_LUOGO[l]) + " rare";
+  /* le quattro buste scaricabili non hanno la rarità segnata nei dati:
+     si dice quello che c'è, senza inventare uno zero */
+  const rare = RARE_LUOGO[l] ? num(RARE_LUOGO[l]) + plurale(RARE_LUOGO[l], " rara", " rare")
+    : "nessuna rara registrata";
 
   return {
     titolo: nomeLuogo(l), indietro: true,
@@ -172,8 +174,8 @@ const etichettaFino = () => STATO.cursore >= ULTIMA ? "" : "fino a " + descriviT
    ===================================================================== */
 function vistaCarte() {
   const corpo = () => {
-    let ch = cerca(TUTTE, STATO.qCarte);
-    ch = filtraCornici(ch);
+    const base = cerca(TUTTE, STATO.qCarte);
+    const ch = filtraCornici(base);
     const dentroCh = ch.filter(dentro);
     const fuori = ch.length - dentroCh.length;
     const s = sagaDelCursore();
@@ -181,9 +183,9 @@ function vistaCarte() {
       ? ` · ${num(dentroCh.filter(nuovaQui).length)} nuove con ${esc(SAGHE[s].nome)}` : ""}</p>`;
     /* mai un vicolo cieco: se la ricerca trova solo carte fuori epoca lo dice */
     if (!dentroCh.length && fuori)
-      return `<p class="vuoto">0 nella tua epoca · ${num(fuori)} fuori<br>
+      return chipCornici(base) + `<p class="vuoto">0 nella tua epoca · ${num(fuori)} fuori<br>
         <button class="azione second" data-az="tutto">Guardale comunque</button></p>`;
-    return chipCornici(ch) + riepilogo + grigliaCarte(ordinaCarte(dentroCh));
+    return chipCornici(base) + riepilogo + grigliaCarte(ordinaCarte(dentroCh));
   };
   return {
     titolo: "Tutte le carte", conta: num(disponibili()) + " nell'epoca",
@@ -218,7 +220,7 @@ function vistaDove() {
       const gr = visti.filter(g => g.saga === s)
         .sort((a, b) => somma(b.luoghi, copertura) - somma(a.luoghi, copertura));
       if (!gr.length) continue;
-      out += `<p class="serie">Campagna ${esc(SAGHE[s].nome)} · ${gr.length} duelli</p>
+      out += `<p class="serie">Saga ${esc(SAGHE[s].nome)} · ${gr.length} duelli</p>
         <div class="duellanti">${gr.map(rigaGruppo).join("")}</div>`;
     }
     const senza = visti.filter(g => g.saga < 0);

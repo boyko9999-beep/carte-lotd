@@ -7,7 +7,7 @@ non ha bisogno di installare niente e i dati funzionano anche senza connessione
 
 ## Cosa fa
 
-**Buste** — cosa c'è dentro la busta di ogni duellante: 33 buste, 10.027 carte,
+**Buste** — cosa c'è dentro la busta di ogni duellante: 33 buste, 10.026 carte,
 quante sono rare, e da quali epoche vengono (la barra colorata in testa alla busta).
 
 **Filtro per epoca** — una sola linea del tempo, sempre **cumulativa**:
@@ -54,7 +54,7 @@ Duel Monsters può avere nell'Extra Deck solo Fusioni, senza che serva una regol
 scritta apposta.
 
 Carte per saga di uscita: DM 2.020 · GX 1.134 · 5D's 1.667 · ZEXAL 1.533 ·
-ARC-V 1.946 · VRAINS 1.727 (cumulate: 2.020 · 3.154 · 4.821 · 6.354 · 8.300 · 10.027).
+ARC-V 1.946 · VRAINS 1.726 (cumulate: 2.020 · 3.154 · 4.821 · 6.354 · 8.300 · 10.026).
 
 ## Rigenerare l'indice
 
@@ -79,6 +79,7 @@ risultato assemblato ed è il file da aprire.
 node strumenti/prova.mjs    # filtro epoca: saghe e anni cumulativi
 node strumenti/prova2.mjs   # buste, ricerca, duelli, scheda carta
 node strumenti/prova3.mjs   # costruttore di mazzi, lista della spesa, persistenza
+node strumenti/prova4.mjs   # scroll, epoca dei mazzi, cancellazioni, carte fuori epoca
 ```
 
-103 controlli su un Chromium headless.
+134 controlli su un Chromium headless.

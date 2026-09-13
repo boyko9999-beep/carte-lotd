@@ -24,7 +24,7 @@ const T = async (t, fn) => { console.log('\n— ' + t); try { await fn(); } catc
 
 await T('avvio', async () => {
   ok('titolo', (await page.textContent('.titolo')).includes('Legacy of the Duelist'));
-  ok('conteggio totale 10.027', (await page.textContent('.conta')) === '10.027 carte',
+  ok('conteggio totale 10.026 carte distinte', (await page.textContent('.conta')) === '10.026 carte',
      await page.textContent('.conta'));
   ok('barra epoca senza filtro', (await page.textContent('.epoca-barra .val')).includes('Tutto il gioco'));
   const buste = await page.$$('.duel');
@@ -75,8 +75,11 @@ await T('filtro per anno con lo stepper', async () => {
   await page.click('.epoca-barra');                    // richiudi
   await page.click('.epoca-barra');                    // riapri
   await page.waitForSelector('.stepper');
-  const anno = await page.textContent('.stepper b');
-  ok('stepper mostra 2008', anno === '2008', anno);
+  // il cursore è sul confine di saga GX (marzo 2008), che non è una tacca "fine anno"
+  ok('sul confine di saga lo stepper mostra la saga', (await page.textContent('.stepper b')) === 'GX',
+     await page.textContent('.stepper b'));
+  ok('le frecce puntano agli anni veri attorno', (await page.textContent('.stepper')).includes('2007')
+     && (await page.textContent('.stepper')).includes('2008'), await page.textContent('.stepper'));
   await page.click('.stepper button:first-child');     // indietro di un anno
   await page.waitForTimeout(120);
   let barra = await page.textContent('.epoca-barra .val');
@@ -85,6 +88,11 @@ await T('filtro per anno con lo stepper', async () => {
   await page.waitForTimeout(120);
   barra = await page.textContent('.epoca-barra .val');
   ok('2008: 3.594 cumulate (più di fine GX)', barra.includes('fine 2008') && barra.includes('3.594'), barra);
+  await page.click('.epoca-barra'); await page.click('.epoca-barra');
+  await page.click('[data-saga="1"]'); await page.waitForTimeout(120);
+  await page.click('.stepper button:last-child'); await page.waitForTimeout(120);
+  barra = await page.textContent('.epoca-barra .val');
+  ok('dal confine GX la freccia avanti non salta il 2008', barra.includes('fine 2008'), barra);
   const nota = await page.textContent('.epoca-pannello .nota').catch(() => '');
   ok('avvisa che fine 2008 è già dentro 5D\'s', nota.includes("5D's"), nota);
 });

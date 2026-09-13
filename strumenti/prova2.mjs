@@ -87,7 +87,8 @@ await T('vista Dove: sfide e campagne', async () => {
   const c = await txt('.conta');
   ok('elenco duelli', /\d+ duelli/.test(c), c);
   const corpo = await txt('#corpo');
-  ok('raggruppati per campagna', corpo.includes('Campagna Duel Monsters') && corpo.includes('Campagna GX'), '');
+  ok('raggruppati per saga del gioco', corpo.includes('Saga Duel Monsters') && corpo.includes('Saga GX'), '');
+  ok('ZEXAL ha solo sfide, non "campagna"', !corpo.includes('Campagna ZEXAL'), '');
   const gruppo = await page.$('[data-g]');
   ok('gruppi a livelli espandibili', !!gruppo);
   if (gruppo) { await gruppo.click(); await page.waitForTimeout(120);
@@ -97,9 +98,46 @@ await T('vista Dove: sfide e campagne', async () => {
 await T('apertura di una sfida', async () => {
   await page.click('.sottoluoghi .duel'); await page.waitForSelector('.testa');
   ok('titolo sfida', (await txt('.titolo')).match(/Sfida|Campagna/) !== null, await txt('.titolo'));
-  ok('dice che è garantita', (await txt('.testa')).includes('garantita'), '');
+  const d = await txt('.testa');
+  ok('dice che è garantita', d.includes('garantita'), d.slice(0,120));
+  ok('distingue sfida da duello di storia', /sfida della saga|duello di storia della saga/.test(d), d.slice(0,120));
   await page.click('[data-az="indietro"]'); await page.waitForTimeout(120);
   ok('torna a Dove', (await txt('.titolo')).includes('Dove si vincono'));
+});
+
+await T('regressioni corrette dalla revisione', async () => {
+  // i chip di cornice non devono sparire quando ne attivi uno
+  await page.click('[data-v="carte"]'); await page.waitForTimeout(200);
+  await page.click('[data-az="tutto"]').catch(() => {});
+  await page.fill('[data-q="qCarte"]', 'dragon'); await page.waitForTimeout(400);
+  const primaChip = (await page.$$('[data-t]')).length;
+  ok('ci sono chip di cornice', primaChip > 1, String(primaChip));
+  await page.click('[data-t="spell"]'); await page.waitForTimeout(250);
+  ok('i chip restano dopo averne attivato uno', (await page.$$('[data-t]')).length === primaChip,
+     String((await page.$$('[data-t]')).length));
+  ok('il filtro si può togliere', await page.$eval('[data-t="spell"]', e => e.getAttribute('aria-pressed')) === 'true');
+  await page.click('[data-t="spell"]'); await page.waitForTimeout(250);
+
+  // il testo cercato non deve sopravvivere al cambio di schermata
+  await page.fill('[data-q="qCarte"]', 'zzzznonesiste');
+  await page.click('[data-v="buste"]');                 // subito, senza aspettare il debounce
+  await page.waitForTimeout(400);
+  ok('la ricerca in volo non atterra sulla schermata dopo',
+     (await page.$$('.duel')).length === 33, String((await page.$$('.duel')).length));
+
+  // "Togli tutti i filtri" deve funzionare anche senza filtro epoca
+  await page.click('.duel'); await page.waitForSelector('.testa');
+  await page.fill('[data-q="q"]', 'zzzznonesiste'); await page.waitForTimeout(400);
+  ok('stato vuoto con via d\'uscita', !!(await page.$('[data-az="pulisci"]')));
+  await page.click('[data-az="pulisci"]'); await page.waitForTimeout(300);
+  ok('togliere i filtri riporta le carte', (await page.$$('.carta')).length === 100,
+     String((await page.$$('.carta')).length));
+
+  // nessuna carta duplicata
+  await page.click('[data-az="indietro"]'); await page.click('[data-v="carte"]');
+  await page.fill('[data-q="qCarte"]', 'Puzzlomino'); await page.waitForTimeout(400);
+  ok('nessun doppione nell\'indice', (await page.$$('.carta')).length === 1,
+     String((await page.$$('.carta')).length));
 });
 
 console.log('\n================  errori JS: ' + errori.length);

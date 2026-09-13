@@ -30,7 +30,7 @@ function apriMazzo(id) {
 }
 function chiudiMazzo() {
   esciDalContesto();
-  STATO.mazzo = null; STATO.pannello = false;
+  STATO.mazzo = null; STATO.pannello = false; STATO.soloNuove = false; STATO.ritorno = null;
   vaiA({ schermata: null, vista: "mazzi" });
 }
 
@@ -144,8 +144,8 @@ function rigaMazzo(nome) {
 function vistaSelettore() {
   const m = mazzoAperto();
   const corpo = () => {
-    let ch = cerca(TUTTE, STATO.qSel);
-    ch = filtraCornici(ch);
+    const base = cerca(TUTTE, STATO.qSel);
+    const ch = filtraCornici(base);
     const dentroCh = ch.filter(k => dentroA(k, m.cursore));
     const fuoriCh = STATO.mostraFuori ? ch.filter(k => !dentroA(k, m.cursore)) : [];
     const vuoto = !dentroCh.length
@@ -153,12 +153,15 @@ function vistaSelettore() {
           STATO.tipiAttivi.size ? " di questo tipo" : ""}.
         ${STATO.mostraFuori ? "" : `<br><button class="azione second" data-az="fuori">Mostra anche le carte fuori epoca</button>`}</p>`
       : "";
-    return chipCornici(ch) + `
+    return chipCornici(base) + `
       <button class="f blocco" data-az="fuori" aria-pressed="${STATO.mostraFuori}">Mostra anche le carte fuori dalla tua epoca</button>
       <p class="serie">${num(dentroCh.length)} carte nella tua epoca</p>
       ${vuoto || grigliaCarte(dentroCh)}
       ${fuoriCh.length ? `<p class="serie">Fuori dalla tua epoca · ${num(fuoriCh.length)}</p>
-        <div class="carte">${fuoriCh.slice(0, 60).map(cartaHTML).join("")}</div>` : ""}`;
+        <div class="carte">${fuoriCh.slice(0, STATO.limiteFuori).map(cartaHTML).join("")}</div>
+        ${fuoriCh.length > STATO.limiteFuori ? `<button class="azione second" data-az="altre-fuori"
+          >Mostra altre carte fuori epoca (${num(fuoriCh.length - STATO.limiteFuori)} rimaste)</button>` : ""}`
+        : ""}`;
   };
   return {
     titolo: "Aggiungi carte", indietro: true,
@@ -191,7 +194,7 @@ function vistaSpesa() {
           <span class="tipo">${esc(ICONA[L.tipo])}</span>
           <span style="min-width:0"><b>${esc(nomeLuogo(l))}</b>
           <small>${ks.length} ${plurale(ks.length, "carta", "carte")} del tuo mazzo${
-            L.tipo === "busta" ? ` su ${num(L.taglia)}${L.rarNota && rare ? ` · ${rare} rare` : ""}`
+            L.tipo === "busta" ? ` su ${num(L.taglia)}${rare ? ` · ${rare} ${plurale(rare, "rara", "rare")}` : ""}`
             : ` · ${esc(dettaglioLuogoTesto(l))}`}</small></span>
           <span class="quanto">${ks.length}</span></button>`;
       }).join("");

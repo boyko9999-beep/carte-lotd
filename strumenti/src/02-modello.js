@@ -106,11 +106,14 @@ const STATO = {
   q: "", qDove: "", qCarte: "", qSel: "",
   tipiAttivi: new Set(),
   limite: 100,
+  limiteFuori: 60,
   nascondiFuori: false,
   ordine: "nome",
   gruppo: null,
   mostraFuori: false,
   zona: null,
+  ritorno: null,
+  nomeNuovo: "",
   avvisoSalvataggio: false
 };
 let MAZZI = [];
