@@ -79,14 +79,38 @@ const HTML = `<html><body><header id="broad_title"><h1>Mazzo di prova</h1></head
 
 await vaiAMazzi();
 
+/* le sigle vere dei prodotti, come stanno sui codici delle carte */
+const SIGLE_TCG = ('SD1 SD2 SD3 SD4 SD5 SD6 SD7 SD8 SD09 SD10 SDRL SDDE SDZW SDSC SDWS SDMM SDMA '
+  + 'SDDL SDLS SDGU SDDC SDWA SDRE SDOK SDBE SDCR SDLI SDGR SDHS SDSE SDMP SR01 SR02 SDMY SDKS '
+  + 'SDPD SR03 SR04 SDCL SR05 SR06 SDPL SR07 SDSB SR08 SDRR').split(' ');
+const SIGLE_OCG = ('YU KA JY PE SY2 SK2 SDM SD11 SD12 SD13 SD14 SD15 SD16 SD17 SD18 SD19 SD20 SD21 '
+  + 'SD22 SD23 SD24 SD25 SD26 SD27 SD28 SD29 SD30 SD34 SD36 SD37').split(' ');
+
 await T('i mazzi ufficiali sono tutti in elenco', async () => {
   ok('c\'è il modo di arrivarci', await page.$('[data-az="ufficiali"]') !== null);
   await page.click('[data-az="ufficiali"]'); await page.waitForTimeout(400);
   const n = await page.evaluate(() => document.querySelectorAll('[data-uff]').length);
-  ok('settanta e passa mazzi', n >= 70, String(n));
+  ok('centoventi mazzi', n >= 115, String(n));
+  const sigle = await page.evaluate(() => UFFICIALI.map(u => u.s.toUpperCase()));
+  const manca = l => l.filter(x => !sigle.includes(x));
+  ok('ci sono tutti gli Structure e Starter Deck usciti da noi',
+     manca(SIGLE_TCG).length === 0, manca(SIGLE_TCG).join(' '));
+  ok('e anche quelli usciti solo in Giappone',
+     manca(SIGLE_OCG).length === 0, manca(SIGLE_OCG).join(' '));
+  ok('nessun mazzo senza sigla', await page.evaluate(() => UFFICIALI.every(u => u.s)));
   ok('sono raggruppati per saga', (await corpo()).includes('Duel Monsters'), (await corpo()).slice(0, 40));
   ok('la conta in cima li dichiara', (await page.textContent('.conta')).includes('mazzi'),
      await page.textContent('.conta'));
+});
+
+await T('i filtri dividono structure, starter e giapponesi', async () => {
+  const conta = async f => { await page.click(`[data-fuff="${f}"]`); await page.waitForTimeout(350);
+    return page.evaluate(() => document.querySelectorAll('[data-uff]').length); };
+  const structure = await conta('structure'), starter = await conta('starter'),
+        ocg = await conta('ocg'), tutti = await conta('tutti');
+  ok('structure + starter fanno il totale', structure + starter === tutti,
+     `${structure} + ${starter} = ${tutti}`);
+  ok('i giapponesi sono una parte', ocg > 0 && ocg < tutti, `${ocg} di ${tutti}`);
 });
 
 await T('si cercano per nome, sigla e anno', async () => {
@@ -96,6 +120,9 @@ await T('si cercano per nome, sigla e anno', async () => {
   await page.fill('[data-q="qUff"]', 'SDY'); await page.waitForTimeout(450);
   const sdy = await page.evaluate(() => [...document.querySelectorAll('[data-uff] .nome')].map(x => x.textContent.trim()));
   ok('la sigla trova il suo mazzo', sdy.length === 1 && /Yugi/.test(sdy[0]), sdy.join(' · '));
+  await page.fill('[data-q="qUff"]', 'revolver'); await page.waitForTimeout(450);
+  const rev = await page.evaluate(() => [...document.querySelectorAll('[data-uff] .nome')].map(x => x.textContent.trim()));
+  ok('e trova anche i giapponesi', rev.length === 1 && /Revolver/.test(rev[0]), rev.join(' · '));
   await page.fill('[data-q="qUff"]', ''); await page.waitForTimeout(450);
 });
 

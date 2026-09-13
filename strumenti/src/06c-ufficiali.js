@@ -15,18 +15,29 @@ const taccaDiData = d => {
 const sagaUfficiale = u => TACCHE[taccaDiData(u.d)].s;
 const nomeUfficiale = u => u.it || u.n;
 
+const soloOCG = u => !!(u.g & 1);
+const eStarter = u => !!(u.g & 2);
+const FILTRI_UFF = [["tutti", "Tutti"], ["structure", "Structure Deck"],
+  ["starter", "Starter Deck"], ["ocg", "Usciti solo in Giappone"]];
+
 function vistaUfficiali() {
   const corpo = () => {
     const q = STATO.qUff.trim();
     const chiavi = q ? radici(q) : [];
+    const f = STATO.filtroUff || "tutti";
     const dentroRicerca = u => !chiavi.length || (() => {
       const imp = " " + [...new Set(spezza(u.n + " " + u.it + " " + u.s + " " + u.d).map(radice))].join(" ") + " ";
       return chiavi.every(r => imp.includes(" " + r));
     })();
-    const scelti = UFFICIALI.map((u, i) => ({ u, i })).filter(x => dentroRicerca(x.u));
-    if (!scelti.length) return `<p class="vuoto">Nessun mazzo per «${esc(q)}».</p>`;
+    const dentroFiltro = u => f === "tutti" || (f === "ocg" ? soloOCG(u)
+      : f === "starter" ? eStarter(u) : !eStarter(u));
+    const scelti = UFFICIALI.map((u, i) => ({ u, i })).filter(x => dentroFiltro(x.u) && dentroRicerca(x.u));
 
-    let html = "", sagaPrima = -1;
+    let html = `<div class="filtri">${FILTRI_UFF.map(([k, et]) =>
+      `<button class="f" data-fuff="${k}" aria-pressed="${f === k}">${esc(et)}</button>`).join("")}</div>`;
+    if (!scelti.length) return html + `<p class="vuoto">Nessun mazzo${q ? ` per «${esc(q)}»` : ""}.</p>`;
+
+    let sagaPrima = -1;
     for (const { u, i } of scelti) {
       const s = sagaUfficiale(u);
       if (s !== sagaPrima) {
@@ -36,16 +47,18 @@ function vistaUfficiali() {
       }
       const qui = u.c.filter(dentro).length;
       html += `<button class="duel" data-uff="${i}">
-        <div class="saga-t" style="background:${SAGHE[s].colore}">${esc(u.s || "?")}</div>
+        <div class="saga-t" style="background:${SAGHE[s].colore}">${esc(u.s || (eStarter(u) ? "ST" : "SD"))}</div>
         <span style="min-width:0"><span class="nome">${esc(nomeUfficiale(u))}</span>
-        <small>${esc(u.d.slice(0, 4))} · ${num(u.c.length)} carte${
+        <small>${esc(u.d.slice(0, 4))} · ${eStarter(u) ? "Starter" : "Structure"} Deck${
+          soloOCG(u) ? " · solo Giappone" : ""} · ${num(u.c.length)} carte${
           u.f ? ` · ${num(u.f)} non ${u.f === 1 ? "c'è" : "ci sono"} in questo gioco` : ""}</small>
         ${epocaAttiva() ? `<small class="${qui === u.c.length ? "bene" : qui ? "" : "male"}">${
           qui === u.c.length ? "tutte nella tua epoca" : `${num(qui)} di ${num(u.c.length)} nella tua epoca`
         }</small>` : ""}</span></button>`;
     }
     return html + `<p class="nota">Sono i prodotti veri, non buste del gioco: qui dentro trovi
-      cosa contengono e da che epoca si giocano. Le copie non sono dichiarate dall'archivio,
+      cosa contengono e da che epoca si giocano. Ci sono anche quelli usciti solo in Giappone,
+      perché le carte poi sono le stesse. Le copie non sono dichiarate dall'archivio,
       quindi la ricetta parte con un esemplare per carta.</p>`;
   };
   return {

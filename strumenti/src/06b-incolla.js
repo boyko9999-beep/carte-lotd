@@ -360,7 +360,7 @@ function leggiLista(testo) {
     if (gia !== undefined) { voci[gia].qta += qta; return; }
     indice.set(chiave, voci.length);
     voci.push({ qta, testo: grezzo, stato: ris.stato, k: ris.k, scelte: ris.scelte || [],
-      conflitto: !!ris.conflitto, lingua: ris.lingua });
+      scelteQta: ris.scelteQta, conflitto: !!ris.conflitto, lingua: ris.lingua });
   };
   /* la prossima riga che conta davvero: si saltano le vuote e le targhette */
   const prossima = i => {
@@ -423,6 +423,17 @@ function leggiLista(testo) {
       /* prima il nome così com'è, ma solo esatto: «7 Colored Fish» e «7» sono
          carte vere, mentre «Pot of Greed (3)» è una carta più una quantità */
       let ris = riconosciEsatto(pezzo), qta = 1, grezzo = pezzo, esplicita = false;
+      /* «Harpie Lady⇥3» combacia col nome della carta «Harpie Lady 3», perché la
+         tabulazione sparisce nella normalizzazione. Se però davanti al numero
+         c'è già un'altra carta, quella è una lista a due colonne: vince la
+         quantità, ma si dichiara, con l'altra lettura lì accanto da toccare. */
+      if (ris.stato === "ok" && /(?:\t|\s{2,}|\s*[:：]|\s*[([]|\.{2,}\s*)\s*\d{1,2}\s*[)\]]?$/.test(pezzo)) {
+        const alt = leggiPezzo(pezzo);
+        if (alt.ris && alt.ris.stato === "ok" && alt.ris.k !== ris.k) {
+          ris = { stato: "vicina", k: alt.ris.k, scelte: [alt.ris.k, ris.k], scelteQta: [alt.q, 1] };
+          qta = alt.q; grezzo = alt.resto; esplicita = true;
+        }
+      }
       if (ris.stato !== "ok" && /^\d{6,9}$/.test(pezzo)) {     // un .ydk: solo codici
         indiciNomi();
         const k = PER_ID.get(pezzo) !== undefined ? PER_ID.get(pezzo) : PER_ID.get(String(+pezzo));
@@ -554,7 +565,7 @@ function riassuntoLettura(l, scelte) {
      risolte, non sul testo di partenza: «3x Pot of Greed» e «2x Pot of Gred»
      sono la stessa carta, e il limite di 3 copie vale sul totale. Fondendo sul
      testo, com'era prima, nascevano mazzi con cinque copie senza un avviso. */
-  const perCarta = new Map();
+  const perCarta = new Map(), risolte = [];
   for (let i = 0; i < l.voci.length; i++) {
     const v = l.voci[i];
     const scelto = scelte && scelte[i] !== undefined ? scelte[i] : undefined;
@@ -570,6 +581,7 @@ function riassuntoLettura(l, scelte) {
       continue;
     }
     if (v.stato === "vicina" && scelto === undefined) interpretate.push({ i, v, k });
+    if (scelto !== undefined) risolte.push({ i, v, k });
     const g = perCarta.get(k) || { k, chieste: 0, voci: [] };
     g.chieste += v.qta; g.voci.push(i);
     perCarta.set(k, g);
@@ -585,7 +597,7 @@ function riassuntoLettura(l, scelte) {
   /* una carta senza data di uscita nota non può stringere l'epoca: conta come «tutto» */
   const epoca = chiavi.length
     ? chiavi.reduce((a, k) => Math.max(a, CARTE[k][T] < 0 ? ULTIMA : CARTE[k][T]), 0) : ULTIMA;
-  return { carte, tagliate, ignote, daScegliere, interpretate, main, extra, epoca,
+  return { carte, tagliate, ignote, daScegliere, interpretate, risolte, main, extra, epoca,
     tolte: [...tolte.values()] };
 }
 
@@ -715,10 +727,17 @@ function vistaLetto() {
           ${esc(CARTE[x][N])}</button>`).join("")}
           <button class="chip spenta" data-togli-voce="${i}">Nessuna</button></div></div>`).join("")}</div>` : "";
 
+    const risolte = r.risolte.length ? `<div class="avviso ok">Hai scelto tu:
+      ${r.risolte.map(({ i, v, k }) => `<div class="ignota"><b>${esc(v.testo)}</b> →
+        <span class="chip">${esc(CARTE[k][N])}</span>
+        <div>${v.scelte.filter(x => x !== k).map(x => `<button class="chip spenta" data-scelta="${i}:${x}">
+          ${esc(CARTE[x][N])}</button>`).join("")}
+          <button class="chip spenta" data-annulla="${i}">Annulla</button></div></div>`).join("")}</div>` : "";
+
     const tagliate = r.tagliate.length ? `<div class="avviso ok">Portate a 3 copie, che è il massimo:
       ${r.tagliate.map(t => `${esc(t.nome)} (ne chiedeva ${t.chieste})`).join(" · ")}</div>` : "";
 
-    if (!totale && !r.ignote.length && !r.daScegliere.length && !r.interpretate.length)
+    if (!totale && !r.ignote.length && !r.daScegliere.length && !r.interpretate.length && !r.risolte.length)
       return r.tolte.length
         ? `<p class="vuoto">Hai tolto tutte le carte.</p>
            <button class="azione second" data-rimetti="${r.tolte.reduce((a, x) => a.concat(x.voci), []).join(",")}">Rimettile</button>`
@@ -726,7 +745,7 @@ function vistaLetto() {
            Controlla di aver incollato la lista giusta.</p>
            <button class="azione second" data-az="indietro">Torna a incollare</button>`;
 
-    return `${scelte}${ignote}${letteCosi}${tagliate}
+    return `${scelte}${ignote}${letteCosi}${risolte}${tagliate}
       ${l.ufficiale != null ? `<p class="nota">${l.mancanti
         ? `${num(l.mancanti)} ${plurale(l.mancanti, "carta del prodotto non esiste", "carte del prodotto non esistono")} in questo gioco.`
         : "Tutte le carte del prodotto esistono in questo gioco."}

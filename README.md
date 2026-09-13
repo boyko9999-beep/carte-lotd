@@ -55,12 +55,19 @@ Prima di creare mostra cosa ha capito: cosa non ha riconosciuto (con i
 suggerimenti da toccare), cosa ha interpretato, quali copie ha portato a 3, e
 **in quale epoca il mazzo diventa giocabile** — la più stretta in cui ci sta tutto.
 
-**I 71 mazzi ufficiali** — tutti gli *Structure Deck* e gli *Starter Deck* usciti
-fino al 2019, col loro nome italiano, raggruppati per saga. Dentro trovi cosa
-contengono, quante di quelle carte esistono in questo gioco e in quale epoca il
-mazzo si gioca; con un tocco diventa una tua ricetta, con la lista della spesa
-per andare a prendere le carte. L'archivio non dichiara quante copie ci siano
-nella scatola, quindi si parte con un esemplare per carta.
+**I 120 mazzi ufficiali** — tutti gli *Structure Deck* e gli *Starter Deck*
+usciti fino al 2019, **compresi i 47 usciti solo in Giappone**, col loro nome
+italiano dove esiste, raggruppati per saga e filtrabili (Structure / Starter /
+solo Giappone). Dentro trovi cosa contengono, quante di quelle carte esistono in
+questo gioco (in tutto ne mancano 58 su 4.700) e in quale epoca il mazzo si
+gioca; con un tocco diventa una tua ricetta, con la lista della spesa per andare
+a prendere le carte. L'archivio non dichiara quante copie ci siano nella scatola,
+quindi si parte con un esemplare per carta.
+
+Il catalogo viene da yugipedia (le quattro categorie OCG/TCG × Structure/Starter,
+l'infobox di ogni prodotto e la sua pagina *Set Card Lists*), e la sigla è quella
+che sta davvero sui codici delle carte, non quella dichiarata nell'infobox — che
+per i prodotti usciti due volte ne riporta una sola.
 
 **Un mazzo dal database di Konami** — nella schermata «Incolla» puoi mettere
 l'indirizzo di un mazzo su `db.yugioh-card.com`. L'app prova a leggere la pagina;
@@ -157,6 +164,6 @@ node strumenti/prova10-incolla.mjs  # lista incollata: lettura, nomi, epoca, cre
 node strumenti/prova11-ufficiali.mjs # mazzi ufficiali e pagina del database di Konami
 ```
 
-346 controlli su un Chromium headless. La prova 5 misura anche i tempi: avvio
+352 controlli su un Chromium headless. La prova 5 misura anche i tempi: avvio
 sotto i 200 ms, ricerca su 10.026 carte sotto il mezzo secondo, e il pulsante
 «Mostra altre carte» che non rallenta man mano che la griglia cresce.

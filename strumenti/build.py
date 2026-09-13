@@ -275,83 +275,161 @@ RITRATTI = ritratti()
 print("ritratti:", len(RITRATTI), "su", len(CANON))
 
 # -------------------------------------------------------- mazzi ufficiali
-# Structure Deck e Starter Deck usciti fino al 2019. Nel gioco non esistono
-# come buste — sono prodotti veri — ma sono ricette gia' fatte da cui partire,
-# e dicono quali carte cercare in quali duelli.
+# Structure Deck e Starter Deck usciti fino al 2019, TCG e OCG. Nel gioco non
+# esistono come buste -- sono prodotti veri -- ma sono ricette gia' fatte, e
+# dicono quali carte cercare in quali duelli.
+#
+# La sorgente e' yugipedia, che ha il catalogo canonico: le quattro categorie
+# (OCG/TCG x Structure/Starter) danno l'elenco, l'infobox di ogni prodotto da'
+# sigla, data e nome italiano, e la pagina "Set Card Lists" da' le carte.
 UFF_FILE = "ufficiali.json"
+API_WIKI = "https://yugipedia.com/api.php?"
+CATEGORIE = ["OCG Structure Decks", "TCG Structure Decks",
+             "OCG Starter Decks", "TCG Starter Decks"]
+REGIONI = ["TCG-EN", "TCG-NA", "TCG-EU", "TCG-AU", "TCG-FC", "TCG-IT",
+           "OCG-JP", "OCG-AE", "OCG-KR"]
+MESI = {m: i + 1 for i, m in enumerate(
+    ["January", "February", "March", "April", "May", "June", "July",
+     "August", "September", "October", "November", "December"])}
 
-def apri_json(url, timeout=180):
-    req = urllib.request.Request(url, headers={"User-Agent": "carte-lotd/2.0"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return json.load(r)
-
-IT_FILE = "ufficiali-it.json"
-
-def nomi_italiani_mazzi(titoli):
-    """Il nome italiano del prodotto, dall'infobox di yugipedia.
-    Una pagina per richiesta: l'API non manda il testo di piu' pagine insieme."""
-    if os.path.exists(IT_FILE):
-        return json.load(open(IT_FILE, encoding="utf-8"))
-    fuori = {}
-    for t in titoli:
-        q = urllib.parse.urlencode({"action": "parse", "format": "json", "formatversion": "2",
-                                    "redirects": "1", "prop": "wikitext", "page": t})
+def wiki(parametri):
+    q = urllib.parse.urlencode(dict(parametri, format="json", formatversion="2"))
+    req = urllib.request.Request(API_WIKI + q, headers={"User-Agent": "carte-lotd/2.0"})
+    for tentativo in range(3):
         try:
-            d = apri_json("https://yugipedia.com/api.php?" + q, 60)
-            testo = d["parse"]["wikitext"]
+            with urllib.request.urlopen(req, timeout=60) as r: return json.load(r)
         except Exception:
-            continue
-        m = re.search(r"^\|\s*it_name\s*=\s*(.+?)\s*$", testo, re.M)
-        if m and m.group(1): fuori[t] = m.group(1)
-    json.dump(fuori, open(IT_FILE, "w", encoding="utf-8"), ensure_ascii=False)
-    print("  nomi italiani trovati:", len(fuori), "su", len(titoli), file=sys.stderr)
+            if tentativo == 2: raise
+            import time; time.sleep(2)
+
+def testo_pagina(titolo):
+    d = wiki({"action": "parse", "redirects": "1", "prop": "wikitext", "page": titolo})
+    return d["parse"]["wikitext"] if "parse" in d else None
+
+def campo_infobox(w, nome):
+    m = re.search(r"^\|\s*" + nome + r"\s*=\s*(.+?)\s*$", w, re.M)
+    v = m.group(1).strip() if m else ""
+    return "" if v.startswith("|") else v
+
+def data_iso(v):
+    m = re.match(r"([A-Z][a-z]+)\s+(\d{1,2}),\s*(\d{4})", v)
+    if m and m.group(1) in MESI:
+        return f"{m.group(3)}-{MESI[m.group(1)]:02d}-{int(m.group(2)):02d}"
+    m = re.match(r"(\d{4})-(\d{2})-(\d{2})", v)
+    return m.group(0) if m else ""
+
+RIPULISCI = [(re.compile(r"\[\[[^\]|]*\|([^\]]*)\]\]"), r"\1"),
+             (re.compile(r"\[\[([^\]]*)\]\]"), r"\1"),
+             (re.compile(r"''+"), ""), (re.compile(r"<[^>]+>"), ""),
+             (re.compile(r"\{\{[^}]*\}\}"), "")]
+
+def nomi_da_lista(w, codici):
+    """I nomi delle carte dentro i blocchi {{Set list}} di una pagina.
+    Una riga e' 'CODICE; Nome; rarita'; le annotazioni dopo '//' possono
+    portare il nome come e' stampato davvero, che a volte e' l'unico che
+    il gioco conosce (Red-Eyes B. Dragon contro Red-Eyes Black Dragon)."""
+    fuori = []
+    for blocco in re.findall(r"\{\{Set list(.*?)\n\}\}", w, re.S | re.I):
+        for riga in blocco.split("\n"):
+            riga = riga.strip()
+            if not riga or riga[0] in "|!": continue
+            pezzi = [x.strip() for x in riga.split(";")]
+            if len(pezzi) < 2: continue
+            grezzo = pezzi[1]
+            stampato = re.search(r"printed-name::\s*([^/;]+)", riga)
+            nomi = [grezzo.split("//")[0]] + ([stampato.group(1)] if stampato else [])
+            puliti = []
+            for n in nomi:
+                for r, sost in RIPULISCI: n = r.sub(sost, n)
+                n = n.replace("&nbsp;", " ").strip()
+                if n and not n.startswith("("): puliti.append(n)
+            if puliti: fuori.append(puliti)
+            codice = pezzi[0].split("-")[0].strip()
+            if re.fullmatch(r"[A-Z0-9]{2,6}", codice): codici.append(codice)
     return fuori
 
 def mazzi_ufficiali():
     if os.path.exists(UFF_FILE):
         return json.load(open(UFF_FILE, encoding="utf-8"))
-    print("scarico i mazzi ufficiali ...", file=sys.stderr)
-    tutti = apri_json("https://db.ygoprodeck.com/api/v7/cardsets.php")
-    scelti = [s for s in tutti
-              if re.search(r"(starter|structure) deck", s.get("set_name", ""), re.I)
-              and (s.get("tcg_date") or "") and s["tcg_date"] <= "2019-12-31"]
-    scelti.sort(key=lambda s: (s["tcg_date"], s["set_name"]))
-    italiani = nomi_italiani_mazzi([s["set_name"] for s in scelti])
-    out = []
-    for s in scelti:
-        url = ("https://db.ygoprodeck.com/api/v7/cardinfo.php?cardset="
-               + urllib.parse.quote(s["set_name"]))
-        try:
-            carte = [c["name"] for c in apri_json(url)["data"]]
-        except Exception as e:
-            print("  salto", s["set_name"], e, file=sys.stderr); continue
-        out.append({"nome": s["set_name"], "it": italiani.get(s["set_name"], ""),
-                    "sigla": s.get("set_code", ""), "data": s["tcg_date"],
-                    "carte": sorted(set(carte))})
-        print(f"  {s['tcg_date']} {s['set_name']}: {len(carte)}", file=sys.stderr)
-    json.dump(out, open(UFF_FILE, "w", encoding="utf-8"), ensure_ascii=False)
-    return out
+    print("scarico il catalogo dei mazzi ufficiali da yugipedia ...", file=sys.stderr)
+    titoli = {}
+    for cat in CATEGORIE:
+        d = wiki({"action": "query", "list": "categorymembers", "cmtype": "page",
+                  "cmtitle": "Category:" + cat, "cmlimit": "500"})
+        for m in d.get("query", {}).get("categorymembers", []):
+            titoli.setdefault(m["title"], set()).add(cat.split()[0])
+    print(f"  prodotti in catalogo: {len(titoli)}", file=sys.stderr)
+
+    fuori = []
+    for titolo, regioni in sorted(titoli.items()):
+        w = testo_pagina(titolo)
+        if not w: continue
+        tipo = campo_infobox(w, "type").lower()
+        if "structure deck" not in tipo and "starter deck" not in tipo: continue
+        nostre = sorted(filter(None, [data_iso(campo_infobox(w, k))
+                                      for k in ("na_release_date", "eu_release_date", "au_release_date")]))
+        loro = sorted(filter(None, [data_iso(campo_infobox(w, k))
+                                    for k in ("jp_release_date", "kr_release_date", "sa_release_date")]))
+        en = campo_infobox(w, "en_name") or titolo
+        tcg = "TCG" in regioni
+        # per un prodotto uscito anche da noi vale la data nostra, per gli altri la loro
+        date = (nostre or loro) if tcg else (loro or nostre)
+        if not date or date[0] > "2019-12-31": continue
+        ordine = REGIONI if tcg else REGIONI[6:] + REGIONI[:6]
+        # quale pagina di elenco esiste davvero, per questo prodotto
+        # "Structure Deck: Marik (TCG)" e "(OCG)" sono due prodotti diversi, ma
+        # le loro pagine di elenco stanno sotto il titolo senza quel suffisso
+        base = re.sub(r"\s*\((?:TCG|OCG)\)$", "", titolo)
+        pref = wiki({"action": "query", "list": "prefixsearch", "pslimit": "40",
+                     "pssearch": f"Set Card Lists:{base}"})
+        esistenti = {p["title"] for p in pref.get("query", {}).get("prefixsearch", [])}
+        carte, sigla_lista = [], ""
+        for reg in ordine:
+            pagina = f"Set Card Lists:{base} ({reg})"
+            if pagina not in esistenti: continue
+            lw = testo_pagina(pagina)
+            if not lw: continue
+            codici = []
+            carte = nomi_da_lista(lw, codici)
+            if carte:
+                # la sigla vera è quella dei codici di questo elenco: l'infobox
+                # ne dichiara una sola anche quando il prodotto è uscito due volte
+                if codici:
+                    comune = collections.Counter(codici).most_common(1)[0][0]
+                    sigla_lista = comune
+                break
+        if not carte: 
+            print(f"  senza elenco: {titolo}", file=sys.stderr); continue
+        fuori.append({"nome": en, "it": campo_infobox(w, "it_name"),
+                      "sigla": sigla_lista or campo_infobox(w, "prefix"), "data": date[0],
+                      "tcg": tcg, "tipo": "starter" if "starter deck" in tipo else "structure",
+                      "carte": carte})
+        print(f"  {date[0]} {(sigla_lista or campo_infobox(w, 'prefix')):6s} {en[:44]:44s} {len(carte)}", file=sys.stderr)
+    json.dump(fuori, open(UFF_FILE, "w", encoding="utf-8"), ensure_ascii=False)
+    return fuori
 
 # i nomi delle carte del gioco, per ritrovarli fra quelli dei prodotti veri
 DA_NOME = {normalizza(c[0]): i for i, c in enumerate(CARTE)}
-MAZZI_UFF = mazzi_ufficiali()
-ITALIANI = nomi_italiani_mazzi([m["nome"] for m in MAZZI_UFF])
 UFFICIALI = []
-for m in MAZZI_UFF:
-    m["it"] = ITALIANI.get(m["nome"], m.get("it") or "")
-    dentro, fuori = [], 0
-    for nome in m["carte"]:
-        k = DA_NOME.get(normalizza(nome))
-        if k is None: fuori += 1
+for m in mazzi_ufficiali():
+    dentro, fuori_gioco = [], 0
+    for nomi in m["carte"]:
+        k = None
+        for n in nomi:                      # il nome canonico o quello stampato
+            k = DA_NOME.get(normalizza(n))
+            if k is not None: break
+        if k is None: fuori_gioco += 1
         else: dentro.append(k)
-    # le "Special Edition" da una o due carte sono bundle promozionali, non mazzi
-    if len(dentro) < 20: continue
+    # i bundle da una o due carte non sono mazzi
+    if len(set(dentro)) < 20: continue
     UFFICIALI.append({"n": m["nome"], "it": m["it"], "s": m["sigla"], "d": m["data"],
-                      "c": sorted(set(dentro)), "f": fuori})
+                      "c": sorted(set(dentro)), "f": fuori_gioco,
+                      "g": (0 if m["tcg"] else 1) + (0 if m["tipo"] == "structure" else 2)})
+UFFICIALI.sort(key=lambda u: (u["d"], u["n"]))
 print("mazzi ufficiali:", len(UFFICIALI),
-      "· carte in media nel gioco:",
-      round(sum(len(u["c"]) for u in UFFICIALI) / max(1, len(UFFICIALI)), 1),
-      "· fuori dal gioco in tutto:", sum(u["f"] for u in UFFICIALI))
+      "· di cui solo OCG:", sum(1 for u in UFFICIALI if u["g"] & 1),
+      "· starter:", sum(1 for u in UFFICIALI if u["g"] & 2),
+      "· carte fuori dal gioco in tutto:", sum(u["f"] for u in UFFICIALI))
 
 # ---------------------------------------------------------------- controlli
 buste = [l for l in LUOGHI if l["tipo"] == "busta"]

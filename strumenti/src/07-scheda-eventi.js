@@ -169,6 +169,7 @@ document.addEventListener("click", e => {
   }
   if ((t = el("[data-mazzo]"))) return apriMazzo(t.dataset.mazzo);
   if ((t = el("[data-uff]"))) return apriUfficiale(+t.dataset.uff);
+  if ((t = el("[data-fuff]"))) { STATO.filtroUff = t.dataset.fuff; return ridisegnaCorpo(); }
   if ((t = el("[data-nuovo]"))) {
     entraInContesto(); STATO.cursore = +t.dataset.nuovo; STATO.soloNuove = false;
     return vaiA({ schermata: "nuovo" });
@@ -188,7 +189,18 @@ document.addEventListener("click", e => {
   if ((t = el("[data-scelta]"))) {
     const [i, k] = t.dataset.scelta.split(":").map(Number);
     STATO.scelteLettura[i] = k;
-    if (STATO.lettura && STATO.lettura.voci[i]) STATO.lettura.voci[i].tolta = false;
+    const v = STATO.lettura && STATO.lettura.voci[i];
+    if (v) {
+      v.tolta = false;
+      /* «Harpie Lady⇥3»: le due letture non hanno la stessa quantità */
+      const j = (v.scelte || []).indexOf(k);
+      if (v.scelteQta && j >= 0 && v.scelteQta[j]) v.qta = v.scelteQta[j];
+    }
+    seguiEpoca();
+    return render();
+  }
+  if ((t = el("[data-annulla]"))) {
+    delete STATO.scelteLettura[+t.dataset.annulla];
     seguiEpoca();
     return render();
   }
