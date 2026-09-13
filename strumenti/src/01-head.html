@@ -6,7 +6,13 @@
 <title>Carte per duellante — Legacy of the Duelist: Link Evolution</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Spectral:wght@500;600&display=swap" rel="stylesheet">
+<!-- I font non devono bloccare il disegno della pagina: i dati sono già qui e
+     l'app deve comparire subito anche se la rete è lenta o irraggiungibile.
+     Si carica come foglio per la stampa e si attiva appena arriva; fino ad
+     allora valgono i ripieghi di sistema dichiarati nelle font-family. -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Spectral:wght@500;600&display=swap"
+      rel="stylesheet" media="print" onload="this.media='all';this.onload=null">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Spectral:wght@500;600&display=swap" rel="stylesheet"></noscript>
 <style>
   :root{
     --ink:#14121c; --panel:#1d1a29; --panel2:#272235; --line:#393350;

@@ -67,6 +67,11 @@ GitHub Pages pubblica il branch `main` così com'è. Due file servono solo a que
   (`meta refresh`) e non aggiunge una tappa alla cronologia del browser.
 - `.nojekyll` — spegne Jekyll, che altrimenti rigenererebbe la pagina dal README.
 
+Il foglio dei font di Google si carica senza bloccare il disegno della pagina: era
+rimasto l'unico pezzo capace di far aspettare un'app che per il resto è istantanea.
+Con i font irraggiungibili l'app compare comunque in ~150 ms, con i caratteri di
+sistema, e i font veri subentrano appena arrivano.
+
 L'app pubblicata è quella del branch `main`: finché una modifica non arriva lì, il
 sito continua a mostrare la versione precedente.
 
