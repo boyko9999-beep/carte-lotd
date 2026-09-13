@@ -141,6 +141,6 @@ node strumenti/prova9-revisione.mjs # i difetti trovati dalla revisione: plurali
 node strumenti/prova10-incolla.mjs  # lista incollata: lettura, nomi, epoca, creazione
 ```
 
-289 controlli su un Chromium headless. La prova 5 misura anche i tempi: avvio
+297 controlli su un Chromium headless. La prova 5 misura anche i tempi: avvio
 sotto i 200 ms, ricerca su 10.026 carte sotto il mezzo secondo, e il pulsante
 «Mostra altre carte» che non rallenta man mano che la griglia cresce.

@@ -207,6 +207,11 @@ function togli(m, nome, tutte) {
   salvaMazzi();
 }
 function semaforo(m) {
+  /* le 3 copie sono una regola del gioco, non un limite dell'app: qui si
+     controllano perché un mazzo può arrivare anche da una lista incollata, e
+     un mazzo illegale non deve mai dirsi «pronto da giocare» */
+  for (const n in m.carte)
+    if (m.carte[n] > 3) return ["male", `Hai ${m.carte[n]} copie di ${n}: il massimo è 3`];
   const main = conta(m, false), extra = conta(m, true), fuori = fuoriEpoca(m).length;
   if (extra > 15) return ["male", `Hai ${extra - 15} carte di troppo nell'Extra`];
   if (main > 60) return ["male", `Hai ${main - 60} carte di troppo nel Main`];

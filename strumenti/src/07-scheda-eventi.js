@@ -178,8 +178,12 @@ document.addEventListener("click", e => {
     return ridisegnaCorpo();
   }
   if ((t = el("[data-togli-voce]"))) {
-    const i = +t.dataset.togliVoce;
-    if (STATO.lettura && STATO.lettura.voci[i]) {
+    /* una carta può venire da più righe della lista: si tolgono tutte, dalla
+       più in fondo, così gli indici di quelle prima restano buoni */
+    const indici = String(t.dataset.togliVoce).split(",").map(Number)
+      .filter(x => !isNaN(x)).sort((a, b) => b - a);
+    for (const i of indici) {
+      if (!STATO.lettura || !STATO.lettura.voci[i]) continue;
       STATO.lettura.voci.splice(i, 1);
       /* le scelte sono indicizzate sulle voci: vanno fatte scorrere anche loro */
       const nuove = {};

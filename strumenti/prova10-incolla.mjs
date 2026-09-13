@@ -266,6 +266,47 @@ await T('l\'unico nome che è inglese di una carta e italiano di un\'altra', asy
      scelte.join(' · '));
 });
 
+/* I tre difetti trovati dalla revisione: ognuna di queste prove fallisce sulla
+   versione di prima, e ognuna produceva un mazzo illegale senza dirlo. */
+await T('la stessa carta scritta in due modi non raddoppia le copie', async () => {
+  await leggi('3x Pot of Greed\n2x Pot of Gred');
+  const r = await letto();
+  ok('tre copie, non cinque', r.nomi.join(' ') === 'Pot of Greed×3', r.nomi.join(' · '));
+  ok('e lo dichiara', (await corpo()).includes('ne chiedeva 5'), (await corpo()).slice(0, 100));
+  ok('il Main conta tre', r.main === 3, String(r.main));
+});
+
+await T('una sotto-intestazione dentro il Side Deck non riapre il Main', async () => {
+  await leggi('Main Deck\n3x Pot of Greed\nSide Deck (15)\nMagie\n3x Maxx "C"\n3x Solemn Judgment');
+  const r = await letto();
+  ok('il Side resta fuori tutto', r.main === 3 && r.carte === 1, `main ${r.main} · carte ${r.carte}`);
+  ok('e viene contato', await page.evaluate(() => STATO.lettura.side) === 6,
+     String(await page.evaluate(() => STATO.lettura.side)));
+});
+
+await T('un mazzo con più di 3 copie non si dice pronto', async () => {
+  const s = await page.evaluate(() => {
+    const m = nuovoMazzo('prova copie', ULTIMA);
+    m.carte['Pot of Greed'] = 6;
+    for (let i = 0; i < 40; i++) m.carte[CARTE[i][0]] = 1;
+    const s = semaforo(m);
+    MAZZI = MAZZI.filter(x => x.id !== m.id); salvaMazzi(true);
+    return s;
+  });
+  ok('il semaforo lo dice', s[0] === 'male' && /6 copie di Pot of Greed/.test(s[1]), s.join(' · '));
+});
+
+await T('la ✕ toglie tutte le righe di quella carta', async () => {
+  await leggi('3x Pot of Greed\n2x Pot of Gred\n1x Dark Magician');
+  ok('due carte', (await letto()).carte === 2, String((await letto()).carte));
+  await page.evaluate(() => [...document.querySelectorAll('[data-togli-voce]')]
+    .find(b => b.getAttribute('aria-label') === 'Togli Pot of Greed').click());
+  await page.waitForTimeout(300);
+  const r = await letto();
+  ok('sparisce del tutto, non una riga sola', r.carte === 1 && r.nomi[0].startsWith('Dark Magician'),
+     r.nomi.join(' · '));
+});
+
 console.log('\nerrori JS:', errori.length); errori.slice(0, 5).forEach(e => console.log('  !', e));
 falliti += errori.length;
 console.log(`\nPASSATI ${passati} · FALLITI ${falliti}`);

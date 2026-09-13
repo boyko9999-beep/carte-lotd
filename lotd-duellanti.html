@@ -684,6 +684,11 @@ function togli(m, nome, tutte) {
   salvaMazzi();
 }
 function semaforo(m) {
+  /* le 3 copie sono una regola del gioco, non un limite dell'app: qui si
+     controllano perché un mazzo può arrivare anche da una lista incollata, e
+     un mazzo illegale non deve mai dirsi «pronto da giocare» */
+  for (const n in m.carte)
+    if (m.carte[n] > 3) return ["male", `Hai ${m.carte[n]} copie di ${n}: il massimo è 3`];
   const main = conta(m, false), extra = conta(m, true), fuori = fuoriEpoca(m).length;
   if (extra > 15) return ["male", `Hai ${extra - 15} carte di troppo nell'Extra`];
   if (main > 60) return ["male", `Hai ${main - 60} carte di troppo nel Main`];
@@ -1920,7 +1925,10 @@ const PARE_INDIRIZZO = /^(?:https?:\/\/|www\.)\S+$/i;
 /* il Side Deck non esiste in questo gioco: da lì in giù si scarta, finché non
    ricomincia il Main o l'Extra */
 const SEZIONE_SIDE = /^[#!]?\s*(?:side|sideboard)\s*(?:deck)?\b/i;
-const SEZIONE_DENTRO = /^[#!]?\s*(?:main|extra|principale|mostri?|magie?|trappole?|monsters?|spells?|traps?)\b/i;
+/* Solo Main ed Extra riaprono il mazzo vero: «Magie» e «Mostri» sono
+   sotto-intestazioni e dentro un Side Deck restano nel Side — altrimenti il
+   Side rientrava dalla finestra e quindici carte finivano nel Main in silenzio. */
+const SEZIONE_DENTRO = /^[#!]?\s*(?:main|extra|principale)\b/i;
 const NUMERI_IT = { una: 1, uno: 1, un: 1, due: 2, tre: 3 };
 
 /* Le forme in cui si scrive una quantità. L'ordine conta: prima quelle con un
@@ -2082,7 +2090,12 @@ function leggiLista(testo) {
    della carta più recente. È il senso di questa app — una ricetta vive dentro
    una saga — e risparmia all'utente di andarla a cercare. */
 function riassuntoLettura(l, scelte) {
-  const carte = [], tagliate = [], ignote = [], daScegliere = [], interpretate = [];
+  const ignote = [], daScegliere = [], interpretate = [];
+  /* Le voci si fondono sulla carta a cui puntano DOPO che le scelte sono state
+     risolte, non sul testo di partenza: «3x Pot of Greed» e «2x Pot of Gred»
+     sono la stessa carta, e il limite di 3 copie vale sul totale. Fondendo sul
+     testo, com'era prima, nascevano mazzi con cinque copie senza un avviso. */
+  const perCarta = new Map();
   for (let i = 0; i < l.voci.length; i++) {
     const v = l.voci[i];
     const scelto = scelte && scelte[i] !== undefined ? scelte[i] : undefined;
@@ -2093,9 +2106,14 @@ function riassuntoLettura(l, scelte) {
       continue;
     }
     if (v.stato === "vicina" && scelto === undefined) interpretate.push({ i, v, k });
-    const qta = Math.min(3, v.qta);
-    if (v.qta > 3) tagliate.push({ nome: CARTE[k][N], chieste: v.qta });
-    carte.push({ k, qta });
+    const g = perCarta.get(k) || { k, chieste: 0, voci: [] };
+    g.chieste += v.qta; g.voci.push(i);
+    perCarta.set(k, g);
+  }
+  const carte = [], tagliate = [];
+  for (const g of perCarta.values()) {
+    if (g.chieste > 3) tagliate.push({ nome: CARTE[g.k][N], chieste: g.chieste });
+    carte.push({ k: g.k, qta: Math.min(3, g.chieste), voci: g.voci });
   }
   const chiavi = carte.map(x => x.k);
   const main = carte.filter(x => !eExtra(CARTE[x.k])).reduce((a, x) => a + x.qta, 0);
@@ -2132,7 +2150,7 @@ function vistaIncolla() {
 }
 
 /* una riga del resoconto: la carta, quante copie, e come toglierla */
-function rigaLetta(k, qta, i) {
+function rigaLetta(k, qta, voci) {
   const c = CARTE[k];
   return `<div class="ris">
     <button class="tocca-ris" data-c="${k}">
@@ -2142,7 +2160,7 @@ function rigaLetta(k, qta, i) {
       ${c[NI] && c[NI] !== c[N] ? `<small class="it">${esc(c[NI])}</small>` : ""}
       <small>${esc(CORNICE[cornice(c)] ? CORNICE[cornice(c)][0] : "")} · ${c[A] || "?"}</small></span>
     <span class="quante">${qta}×</span>
-    <button class="via-voce" data-togli-voce="${i}" aria-label="Togli ${esc(c[N])}">✕</button></div>`;
+    <button class="via-voce" data-togli-voce="${voci.join(",")}" aria-label="Togli ${esc(c[N])}">✕</button></div>`;
 }
 
 function vistaLetto() {
@@ -2226,16 +2244,13 @@ function vistaLetto() {
       <button class="azione" data-az="crea-lista" ${totale ? "" : "disabled"}>Crea il mazzo</button>
 
       <div class="sezione"><h3>Main Deck</h3><small>${r.main} carte</small></div>
-      ${main.length ? main.map(x => rigaLetta(x.k, Math.min(3, x.qta), indiceVoce(l, x.k))).join("")
+      ${main.length ? main.map(x => rigaLetta(x.k, x.qta, x.voci)).join("")
         : `<p class="vuoto">Niente nel Main.</p>`}
       ${extra.length ? `<div class="sezione"><h3>Extra Deck</h3><small>${r.extra} carte</small></div>`
-        + extra.map(x => rigaLetta(x.k, Math.min(3, x.qta), indiceVoce(l, x.k))).join("") : ""}`;
+        + extra.map(x => rigaLetta(x.k, x.qta, x.voci)).join("") : ""}`;
   };
   return { titolo: "Cosa ho letto", indietro: true, corpo };
 }
-/* dalla carta alla voce che l'ha prodotta, per poterla togliere */
-const indiceVoce = (l, k) => l.voci.findIndex((v, i) =>
-  v.k === k || (STATO.scelteLettura && STATO.scelteLettura[i] === k));
 
 /* =====================================================================
    Scheda della carta
@@ -2416,8 +2431,12 @@ document.addEventListener("click", e => {
     return ridisegnaCorpo();
   }
   if ((t = el("[data-togli-voce]"))) {
-    const i = +t.dataset.togliVoce;
-    if (STATO.lettura && STATO.lettura.voci[i]) {
+    /* una carta può venire da più righe della lista: si tolgono tutte, dalla
+       più in fondo, così gli indici di quelle prima restano buoni */
+    const indici = String(t.dataset.togliVoce).split(",").map(Number)
+      .filter(x => !isNaN(x)).sort((a, b) => b - a);
+    for (const i of indici) {
+      if (!STATO.lettura || !STATO.lettura.voci[i]) continue;
       STATO.lettura.voci.splice(i, 1);
       /* le scelte sono indicizzate sulle voci: vanno fatte scorrere anche loro */
       const nuove = {};
