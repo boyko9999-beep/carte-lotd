@@ -193,6 +193,62 @@ await T('si può incollare anche in italiano', async () => {
   ok('riconosce i nomi italiani ufficiali', r.carte === 3 && r.ignote === 0, r.nomi.join(' · '));
 });
 
+await T('il Side Deck non entra nel mazzo', async () => {
+  await leggi('Main Deck\n3x Pot of Greed\n2x Dark Magician\nSide Deck (15)\n3x Maxx "C"\n3x Solemn Judgment');
+  const r = await letto();
+  ok('prende solo il Main', r.carte === 2 && r.main === 5, `carte ${r.carte} · main ${r.main}`);
+  ok('e conta quelle lasciate fuori',
+     await page.evaluate(() => STATO.lettura.side) === 6,
+     String(await page.evaluate(() => STATO.lettura.side)));
+  ok('dicendolo a schermo', (await corpo()).includes('Side Deck non c'), (await corpo()).slice(0, 120));
+});
+
+await T('un refuso si corregge da solo, dicendolo', async () => {
+  await leggi('3x Pot of Gred\n2x Dark Magiciann\n1x Mirrorr Force');
+  const r = await letto();
+  ok('le tre carte ci sono lo stesso', r.carte === 3, String(r.carte));
+  ok('sono quelle giuste', r.nomi.join(' ').includes('Pot of Greed') && r.nomi.join(' ').includes('Dark Magician'),
+     r.nomi.join(' · '));
+  ok('e lo dichiara invece di farlo di nascosto',
+     (await corpo()).includes('interpretate') || (await corpo()).includes('interpretata'),
+     (await corpo()).slice(0, 80));
+  ok('con le alternative da toccare', (await page.$$('[data-scelta]')).length > 0);
+});
+
+await T('quando due carte si somigliano non indovina: chiede', async () => {
+  await leggi('3x Red-Eyes Black Dragon');
+  const r = await letto();
+  ok('non la mette dentro a caso', r.carte === 0 && r.ignote === 1, `carte ${r.carte} · ignote ${r.ignote}`);
+  const scelte = await page.evaluate(() => STATO.lettura.voci[0].scelte.map(k => CARTE[k][0]));
+  ok('ma propone anche quella giusta del gioco', scelte.includes('Red-Eyes B. Dragon'), scelte.join(' · '));
+});
+
+await T('intestazioni e titoli in italiano', async () => {
+  await leggi('Mazzo Exodia — lista di Marti\nMostri (8)\n3x Royal Magical Library\nCarte Magia (12)\n3x Pot of Greed\nTotale: 40 carte\nhttps://ygoprodeck.com/deck/exodia-1');
+  const r = await letto();
+  ok('legge solo le due carte', r.carte === 2, String(r.carte) + ' · ' + r.nomi.join(' · '));
+  ok('e prende il titolo come nome',
+     await page.inputValue('#nomeLista') === 'Mazzo Exodia — lista di Marti',
+     await page.inputValue('#nomeLista'));
+});
+
+await T('più carte sulla stessa riga, anche senza quantità', async () => {
+  await leggi('Mostro Resuscitato, Buco Nero, Raigeki\nMago Nero e Ragazza Maga Nera\n2x Adreus, Keeper of Armageddon');
+  const r = await letto();
+  ok('le separa quando sono carte vere', r.carte === 6, String(r.carte) + ' · ' + r.nomi.join(' · '));
+  ok('ma non spezza un nome che contiene una virgola',
+     r.nomi.includes('Adreus, Keeper of Armageddon×2'), r.nomi.join(' · '));
+});
+
+await T('quantità scritte in tutti i modi', async () => {
+  await leggi('Pot of Greed: 3\nDark Magician .... 2\ntre Anfora dell\'Avidità\n3 copie di Strega della Foresta Nera\nn. 2 Mago della Fede\nMirror Force (x3)');
+  const r = await letto();
+  const attesi = { 'Pot of Greed': 3, 'Dark Magician': 2, 'Witch of the Black Forest': 3,
+    'Magician of Faith': 2, 'Mirror Force': 3 };
+  for (const [n, q] of Object.entries(attesi))
+    ok(`${n} ×${q}`, r.nomi.includes(`${n}×${q}`), r.nomi.join(' · '));
+});
+
 console.log('\nerrori JS:', errori.length); errori.slice(0, 5).forEach(e => console.log('  !', e));
 falliti += errori.length;
 console.log(`\nPASSATI ${passati} · FALLITI ${falliti}`);

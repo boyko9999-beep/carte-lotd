@@ -45,9 +45,15 @@ qui) e l'app costruisce il mazzo. Legge le quantità in tutte le forme in cui si
 scrivono (`3x Nome`, `Nome x3`, `3 Nome`, codici `.ydk`), salta intestazioni e
 conteggi, riconosce i nomi inglesi e quelli italiani ufficiali, e ricompone le
 abbreviazioni con la coda condivisa (`1x Left Arm / 1x Right Leg of the Forbidden
-One`). Prima di creare mostra cosa ha capito: cosa non ha riconosciuto (con i
-suggerimenti da toccare), quali copie ha portato a 3, e **in quale epoca il mazzo
-diventa giocabile** — la più stretta in cui ci sta tutto.
+One`). Corregge da solo i refusi evidenti (`Pot of Gred` → *Pot of Greed*) ma solo
+quando una carta stacca nettamente tutte le altre: se due si somigliano
+(`Red-Eyes Black Dragon` contro *Red-Eyes Black Dragon Sword* e *Red-Eyes B.
+Dragon*) chiede invece di indovinare. Il Side Deck resta fuori, perché in questo
+gioco non c'è.
+
+Prima di creare mostra cosa ha capito: cosa non ha riconosciuto (con i
+suggerimenti da toccare), cosa ha interpretato, quali copie ha portato a 3, e
+**in quale epoca il mazzo diventa giocabile** — la più stretta in cui ci sta tutto.
 
 **Mazzi (ricette)** — un mazzo nasce dentro un'epoca. Aprendolo, tutta l'app si
 allinea a quell'epoca e puoi pescare solo dalle carte che esistevano allora.
@@ -135,6 +141,6 @@ node strumenti/prova9-revisione.mjs # i difetti trovati dalla revisione: plurali
 node strumenti/prova10-incolla.mjs  # lista incollata: lettura, nomi, epoca, creazione
 ```
 
-264 controlli su un Chromium headless. La prova 5 misura anche i tempi: avvio
+282 controlli su un Chromium headless. La prova 5 misura anche i tempi: avvio
 sotto i 200 ms, ricerca su 10.026 carte sotto il mezzo secondo, e il pulsante
 «Mostra altre carte» che non rallenta man mano che la griglia cresce.

@@ -13,11 +13,20 @@
    ===================================================================== */
 
 /* ---- nomi: gli indici per riconoscerli ---- */
-const senzaSegni = s => senzaAccenti(String(s)).toLowerCase().replace(/[^a-z0-9]+/g, "");
+/* le lettere greche compaiono in una manciata di nomi («Damage Vaccine Ω MAX»)
+   e nessuno le scrive: si trasformano in come si leggono */
+const GRECHE = { "\u03b1": "alpha", "\u0391": "alpha", "\u03b2": "beta", "\u0392": "beta",
+  "\u03b3": "gamma", "\u0393": "gamma", "\u03b4": "delta", "\u0394": "delta",
+  "\u03c9": "omega", "\u03a9": "omega", "\u03a3": "sigma", "\u03c3": "sigma" };
+const senzaSegni = s => senzaAccenti(String(s)).toLowerCase()
+  .replace(/[\u0391-\u03c9]/g, c => GRECHE[c] || c)
+  .replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "");
 let IT_ESATTO = null, NORM_EN = null, NORM_IT = null, PER_ID = null;
+let NOMI_PIATTI = null;
 function indiciNomi() {
   if (IT_ESATTO) return;
   IT_ESATTO = new Map(); NORM_EN = new Map(); NORM_IT = new Map(); PER_ID = new Map();
+  NOMI_PIATTI = new Array(CARTE.length);
   const metti = (mappa, chiave, k) => {
     if (!chiave) return;
     const gia = mappa.get(chiave);
@@ -27,8 +36,10 @@ function indiciNomi() {
     const c = CARTE[k];
     if (c[ID]) PER_ID.set(String(c[ID]), k);
     if (c[NI] && !IT_ESATTO.has(c[NI].toLowerCase())) IT_ESATTO.set(c[NI].toLowerCase(), k);
-    metti(NORM_EN, senzaSegni(c[N]), k);
-    if (c[NI]) metti(NORM_IT, senzaSegni(c[NI]), k);
+    const ne = senzaSegni(c[N]), ni = c[NI] ? senzaSegni(c[NI]) : "";
+    NOMI_PIATTI[k] = ni && ni !== ne ? [ne, ni] : [ne];
+    metti(NORM_EN, ne, k);
+    if (ni) metti(NORM_IT, ni, k);
   }
 }
 
@@ -38,42 +49,72 @@ function indiciNomi() {
    dell'Avidità» deve vedersi proporre l'«Anfora dell'Avidità», che è il nome
    italiano vero. */
 /* quanto due nomi si somigliano davvero: bigrammi in comune (Dice).
-   Serve a scegliere fra carte che rispondono alle stesse parole. */
-function somiglianza(a, b) {
-  if (a.length < 2 || b.length < 2) return a === b ? 1 : 0;
-  const A = new Map();
-  for (let i = 0; i < a.length - 1; i++) { const g = a.slice(i, i + 2); A.set(g, (A.get(g) || 0) + 1); }
-  let comuni = 0, nb = 0;
+   La mappa della parola cercata si costruisce una volta sola: qui dentro si
+   passano diecimila nomi, e rifarla ogni volta costava un quarto di secondo. */
+const bigrammi = a => {
+  const m = new Map();
+  for (let i = 0; i < a.length - 1; i++) { const g = a.slice(i, i + 2); m.set(g, (m.get(g) || 0) + 1); }
+  return m;
+};
+function somiglianzaCon(A, lenA, b) {
+  if (lenA < 2 || b.length < 2) return 0;
+  let comuni = 0;
+  const usati = [];
   for (let i = 0; i < b.length - 1; i++) {
-    const g = b.slice(i, i + 2); nb++;
-    const q = A.get(g);
-    if (q) { comuni++; A.set(g, q - 1); }
+    const g = b.slice(i, i + 2), q = A.get(g);
+    if (q) { comuni++; A.set(g, q - 1); usati.push(g); }
   }
-  return 2 * comuni / (a.length - 1 + nb);
+  for (const g of usati) A.set(g, A.get(g) + 1);      // la mappa si riusa: si rimette a posto
+  return 2 * comuni / (lenA - 1 + b.length - 1);
 }
+const somiglianza = (a, b) => a.length < 2 || b.length < 2 ? (a === b ? 1 : 0)
+  : somiglianzaCon(bigrammi(a), a.length, b);
+/* una lista fatta tutta di carte che non esistono non deve tenere fermo il
+   telefono: dopo venticinque ricerche larghe si smette di suggerire */
+let scansioni = 0;
+const azzeraScansioni = () => { scansioni = 0; };
 function suggerimenti(t) {
-  const parole = [...new Set(spezza(t))].filter(p => p.length >= 3);
-  const punteggio = new Map();
-  for (const p of parole.slice(0, 8)) {
-    let r = [];
-    try { r = cerca(TUTTE, p); } catch (e) { r = []; }
-    if (!r.length || r.length > 3000) continue;
-    /* una parola rara pesa più di una comune: «avidità» dice molto, «del» quasi niente */
-    const peso = 1 / r.length;
-    for (const k of r) punteggio.set(k, (punteggio.get(k) || 0) + peso);
-  }
-  /* fra le più pertinenti vince poi quella che SI SCRIVE più simile: chi ha
-     scritto «Vaso dell'Avidità» deve trovare l'«Anfora dell'Avidità». */
   const n = senzaSegni(t);
-  return [...punteggio.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0]).slice(0, 15)
-    .map(x => [x[0], Math.max(somiglianza(n, senzaSegni(CARTE[x[0]][N])),
-      CARTE[x[0]][NI] ? somiglianza(n, senzaSegni(CARTE[x[0]][NI])) : 0)])
-    .sort((a, b) => b[1] - a[1]).slice(0, 3).map(x => x[0]);
+  if (n.length < 3 || ++scansioni > 25) return [];
+  indiciNomi();
+  /* si confronta con tutti i nomi, inglesi e italiani: è l'unico modo di
+     ripescare un refuso («Pot of Gred») o un nome che il gioco scrive in un
+     altro modo («Red-Eyes Black Dragon» qui si chiama «Red-Eyes B. Dragon»).
+     Diecimila confronti fra stringhe corte: si fa solo quando una carta non si
+     trova, e costa una manciata di millisecondi. */
+  const min = n.length * 0.55, max = n.length * 1.9;
+  const A = bigrammi(n), migliori = [];
+  for (let k = 0; k < CARTE.length; k++) {
+    let s = 0;
+    for (const nome of NOMI_PIATTI[k]) {
+      if (nome.length < min || nome.length > max) continue;
+      const x = somiglianzaCon(A, n.length, nome);
+      if (x > s) s = x;
+    }
+    if (s < 0.5) continue;
+    if (migliori.length < 5 || s > migliori[migliori.length - 1][1]) {
+      migliori.push([k, s]);
+      migliori.sort((a, b) => b[1] - a[1]);
+      if (migliori.length > 5) migliori.pop();
+    }
+  }
+  return migliori;
 }
+const soloChiavi = m => m.map(x => x[0]);
 
 /* La scala del riconoscimento, dal più esatto al più largo. Si allarga solo
    se il passo prima non ha trovato niente. */
 function riconosci(testo) {
+  const t = String(testo).trim();
+  if (!t) return { stato: "ignota", scelte: [] };
+  const prove = varianti(t);
+  for (let i = 1; i < prove.length; i++) {
+    const r = riconosciEsatto(prove[i - 1]);
+    if (r.stato !== "ignota") return r;
+  }
+  return riconosciEsatto(prove[prove.length - 1], t);
+}
+function riconosciEsatto(testo, perSuggerimenti) {
   const t = String(testo).trim();
   if (!t) return { stato: "ignota", scelte: [] };
   indiciNomi();
@@ -90,7 +131,16 @@ function riconosci(testo) {
     if (v.length === 1) return { stato: "ok", k: v[0] };
     return { stato: "scelta", scelte: v.slice(0, 4) };  // due carte plausibili: si chiede
   }
-  return { stato: "ignota", scelte: suggerimenti(t) };
+  if (perSuggerimenti === undefined) return { stato: "ignota", scelte: [] };
+  const vicine = suggerimenti(perSuggerimenti);
+  /* Un refuso si corregge da solo, ma alla luce del sole: se una carta somiglia
+     quasi identica e stacca nettamente la seconda, si prende quella e lo si
+     dice, con le altre lì accanto da toccare. Se invece le prime due si
+     somigliano fra loro — «Red-Eyes Black Dragon» contro «Red-Eyes Black Dragon
+     Sword» — non si indovina: si chiede. */
+  if (vicine.length && vicine[0][1] >= 0.9 && (vicine.length < 2 || vicine[0][1] - vicine[1][1] >= 0.12))
+    return { stato: "vicina", k: vicine[0][0], scelte: soloChiavi(vicine) };
+  return { stato: "ignota", scelte: soloChiavi(vicine) };
 }
 
 /* «1x Left Arm / 1x Right Leg of the Forbidden One»: le prime sono abbreviate e
@@ -105,96 +155,177 @@ function completaConCoda(t, ultimo) {
 }
 
 /* ---- il testo: quantità e righe da buttare ---- */
-/* i segni da elenco che si portano dietro le liste incollate. Niente virgolette:
-   «A» Cell Breeding Device e i suoi parenti cominciano davvero con una virgoletta. */
-const SEGNI_ELENCO = /^[\s\u00a0>*\-–—•·▪◦‣∙+]+/;
+/* i segni da elenco che si portano dietro le liste incollate: trattini, puntini,
+   tabulazioni, asterischi del markdown, emoji. Si toglie tutto quello che non è
+   una lettera o una cifra — ma non le virgolette, perché «"A" Cell Breeding
+   Device» e i suoi parenti cominciano davvero così. */
+const SEGNI_PRIMA = /^[^\p{L}\p{N}"'(]+/u;
+const SEGNI_DOPO = /[^\p{L}\p{N})\]"']+$/u;
 const NUMERATA = /^\d+[.)]\s+/;
-const CODICE_SET = /\s*[([][A-Z0-9]{2,6}-[A-Z]{0,3}\d{2,4}[)\]]\s*$/i;
 /* Una riga è un'intestazione solo se è TUTTA lì: così «Magie (32)» sparisce
    ma «Deck Devastation Virus», che comincia per Deck, resta una carta. */
-const SEZIONE = /^[#!]?\s*(?:main|extra|side|principale|mostri?|magie?|trappole?|monsters?|spells?|traps?|deck ?list|sideboard|totale|total|fusioni?|sincro|synchro|xyz|link|pendulum|pendolo|rituali?)\s*(?:deck)?\s*[:\-–]?\s*(?:[([]?\s*\d+\s*[)\]]?)?\s*$/i;
+const SEZIONE = /^[#!]?\s*(?:main|extra|side|principale|mostri?|magie?|trappole?|monsters?|spells?|traps?|deck ?list|sideboard|totale|total|fusioni?|sincro|synchro|xyz|link|pendulum|pendolo|rituali?)\s*(?:deck)?\s*[:\-–]?\s*(?:[([]?\s*\d+\s*[)\]]?)?\s*(?:carte|cards)?\s*$/i;
+/* Seconda rete per le intestazioni, usata SOLO su una riga che non è risultata
+   una carta: se è fatta tutta di parole da intestazione e numeri, è
+   un'intestazione. «Deck Devastation Virus» non ci casca, perché "devastation"
+   non è una di quelle parole — e comunque è già stata riconosciuta come carta. */
+const PAROLA_SEZIONE = /^(?:carte|carta|mazzo|deck|decklist|lista|main|extra|side|sideboard|principale|mostri|mostro|magie|magia|trappole|trappola|monsters?|spells?|traps?|fusioni|fusione|sincro|synchro|xyz|link|pendulum|pendolo|rituali|rituale|effetto|effetti|normali|normale|veloci|veloce|continue|totale|total|cards?|deck)$/i;
+const soloParoleDiSezione = r => {
+  const p = r.replace(/[()[\]:.,\-–—]/g, " ").split(/\s+/).filter(Boolean);
+  return p.length > 0 && p.length <= 4 && p.some(x => PAROLA_SEZIONE.test(x))
+    && p.every(x => PAROLA_SEZIONE.test(x) || /^\d+$/.test(x));
+};
+const PARE_INDIRIZZO = /^(?:https?:\/\/|www\.)\S+$/i;
+
+/* il Side Deck non esiste in questo gioco: da lì in giù si scarta, finché non
+   ricomincia il Main o l'Extra */
+const SEZIONE_SIDE = /^[#!]?\s*(?:side|sideboard)\s*(?:deck)?\b/i;
+const SEZIONE_DENTRO = /^[#!]?\s*(?:main|extra|principale|mostri?|magie?|trappole?|monsters?|spells?|traps?)\b/i;
 const NUMERI_IT = { una: 1, uno: 1, un: 1, due: 2, tre: 3 };
 
 /* Le forme in cui si scrive una quantità. L'ordine conta: prima quelle con un
-   segno esplicito, per ultima «3 Nome», che è anche l'inizio di «3-Hump Lacooda». */
+   segno esplicito, per ultima «3 Nome», che è anche l'inizio di «3-Hump Lacooda».
+   «Harpie Lady 3» invece è un nome intero: un numero in coda vale come quantità
+   solo se è staccato da una tabulazione o da più spazi. */
 function staccaQuantita(t) {
   let m;
   if ((m = t.match(/^(\d{1,2})\s*[x×*]\s*(.+)$/i))) return [+m[1], m[2]];
   if ((m = t.match(/^[x×]\s*(\d{1,2})[\s.:-]+(.+)$/i))) return [+m[1], m[2]];
+  if ((m = t.match(/^(\d{1,2})\s+(?:copie|copia|volte)\s+(?:di\s+)?(.+)$/i))) return [+m[1], m[2]];
   if ((m = t.match(/^(una|uno|un|due|tre)\s+(?:copie|copia)\s+di\s+(.+)$/i))) return [NUMERI_IT[m[1].toLowerCase()], m[2]];
+  if ((m = t.match(/^(una|uno|un|due|tre)\s+(.+)$/i))) return [NUMERI_IT[m[1].toLowerCase()], m[2]];
+  if ((m = t.match(/^(.+?)\s*[([]\s*[x×*]\s*(\d{1,2})\s*[)\]]$/i))) return [+m[2], m[1]];
   if ((m = t.match(/^(.+?)\s*[x×*]\s*(\d{1,2})$/i))) return [+m[2], m[1]];
   if ((m = t.match(/^(.+?)\s*[([]\s*(\d{1,2})\s*[)\]]$/))) return [+m[2], m[1]];
+  if ((m = t.match(/^(.+?)\s*:\s*(\d{1,2})$/))) return [+m[2], m[1]];
+  if ((m = t.match(/^(.+?)[\s.·•_]{2,}(\d{1,2})$/))) return [+m[2], m[1]];
+  if ((m = t.match(/^(.+?)(?:\t+|\s{2,})(\d{1,2})$/))) return [+m[2], m[1]];
   if ((m = t.match(/^(\d{1,2})[\s.:-]+(.+)$/))) return [+m[1], m[2]];
   return [1, t];
 }
 
-/* Una riga può contenere più carte, ma solo se ogni pezzo dopo il primo comincia
-   con una quantità: «A/D Changer» e «D/D Berfomet» sono nomi veri e non vanno
-   spezzati (nell'archivio ce ne sono 56 così). */
+/* Quello che resta attaccato al nome nelle liste vere: il codice del set, la
+   rarità, il nome italiano fra parentesi. Si tolgono solo se il nome così com'è
+   non esiste — «Destiny HERO - Dominance» non va toccata. */
+function varianti(t) {
+  const out = [t];
+  let x = t;
+  for (let i = 0; i < 3; i++) {
+    const y = x.replace(/\s*[([][^)\]]*[)\]]\s*$/, "")
+      .replace(/\s+[-–—]\s+[A-Za-zÀ-ÿ ]{3,20}$/, "").trim();
+    if (!y || y === x) break;
+    out.push(y); x = y;
+  }
+  return out;
+}
+
+/* Una riga può contenere più carte: separate da « / » (nessun nome ne contiene
+   uno con gli spazi intorno, mentre «D/D Berfomet» e «A/D Changer» sì: sono 56
+   nell'archivio e non vanno spezzate) oppure da virgole, ma solo se ogni pezzo
+   dopo il primo comincia con una quantità — «Adreus, Keeper of Armageddon» è un
+   nome solo. */
+const CON_QUANTITA = /^(?:\d{1,2}\s*[x×*]?|[x×]\s*\d{1,2})\s+\S/i;
+const SEPARATORI = [/\s*,\s*/, /\s+e\s+/i, /\s+and\s+/i, /\s+\+\s+/];
 function spezzaRiga(r) {
-  if (!r.includes("/")) return [r];
-  const pezzi = r.split(/\s*\/\s*/).map(x => x.trim()).filter(Boolean);
-  if (pezzi.length > 1 && pezzi.slice(1).every(p => /^(?:\d{1,2}\s*[x×*]?|[x×]\s*\d{1,2})\s+\S/i.test(p)))
-    return pezzi;
+  if (/\s\/\s/.test(r)) {
+    const p = r.split(/\s+\/\s+/).map(x => x.trim()).filter(Boolean);
+    if (p.length > 1) return p;
+  }
+  for (const sep of SEPARATORI) {
+    if (!sep.test(r)) continue;
+    const p = r.split(sep).map(x => x.trim()).filter(Boolean);
+    if (p.length < 2) continue;
+    /* con le quantità davanti è chiaro che sono carte diverse; senza, si accetta
+       lo spezzettamento solo se OGNI pezzo è davvero una carta — così
+       «Adreus, Keeper of Armageddon» resta una carta sola */
+    if (p.slice(1).every(x => CON_QUANTITA.test(x))) return p;
+    if (p.every(x => riconosciEsatto(staccaQuantita(x)[1].trim()).stato === "ok")) return p;
+  }
   return [r];
 }
 
 /* ---- leggere tutta la lista ---- */
+const ENTITA = [[/&amp;/gi, "&"], [/&quot;/gi, '"'], [/&(?:apos|#0?39);/gi, "'"],
+  [/&nbsp;/gi, " "], [/&#x200b;/gi, ""], [/&#8203;/gi, ""], [/&[a-z]{2,6};/gi, ""]];
+
 function leggiLista(testo) {
+  azzeraScansioni();
   const righe = String(testo || "").replace(/\r/g, "").split("\n");
   const voci = [], indice = new Map();
-  let nome = null, saltate = 0;
+  let nome = null, saltate = 0, side = 0, nelSide = false;
 
   const aggiungiVoce = (qta, grezzo, ris) => {
     const chiave = ris.stato === "ok" ? "k" + ris.k : "t" + grezzo.toLowerCase();
     const gia = indice.get(chiave);
-    if (gia !== undefined) { voci[gia].qta += qta; return voci[gia]; }
-    const v = { qta, testo: grezzo, stato: ris.stato, k: ris.k, scelte: ris.scelte || [] };
-    indice.set(chiave, voci.length); voci.push(v);
-    return v;
+    if (gia !== undefined) { voci[gia].qta += qta; return; }
+    indice.set(chiave, voci.length);
+    voci.push({ qta, testo: grezzo, stato: ris.stato, k: ris.k, scelte: ris.scelte || [] });
   };
 
   for (const grezza of righe) {
-    let r = String(grezza).replace(/\u00a0/g, " ").trim();
-    if (!r) continue;
+    let r = String(grezza).replace(/\u00a0/g, " ");
+    for (const [re, con] of ENTITA) r = r.replace(re, con);
+    r = r.trim();
+    if (!r || r.startsWith("//")) continue;
     /* i commenti: «# Mazzo di prova» dà il nome, «#main» e «!side» dei .ydk no */
     if (r[0] === "#" || r[0] === "!") {
+      if (SEZIONE_SIDE.test(r)) { nelSide = true; continue; }
+      if (SEZIONE_DENTRO.test(r)) { nelSide = false; continue; }
       const c = r.slice(1).trim();
       if (!nome && c && !/^(main|extra|side|created|epoca|dove trovare)/i.test(c)) nome = c;
       continue;
     }
-    r = r.replace(SEGNI_ELENCO, "").replace(NUMERATA, "").replace(/[\s.,;]+$/, "").trim();
+    r = r.replace(SEGNI_PRIMA, "").replace(NUMERATA, "")
+      .replace(/^n[.°]?\s*(?=\d)/i, "").replace(SEGNI_DOPO, "").trim();
     if (!r) continue;
-    if (SEZIONE.test(r)) { saltate++; continue; }
+    if (PARE_INDIRIZZO.test(r)) { saltate++; continue; }
+    const dentroSide = x => { if (SEZIONE_SIDE.test(x)) nelSide = true; else if (SEZIONE_DENTRO.test(x)) nelSide = false; };
+    if (SEZIONE.test(r)) { dentroSide(r); saltate++; continue; }
     /* righe senza nemmeno una lettera: righelli, conteggi, numeri sparsi.
        I codici dei .ydk passano di qui dentro perché sono 6-9 cifre. */
     if (!/[a-z]/i.test(r) && !/^\d{6,9}$/.test(r)) { saltate++; continue; }
 
-    const pezzi = spezzaRiga(r);
+    /* la riga intera è già una carta? allora non si spezza e non si interpreta:
+       «Adreus, Keeper of Armageddon» e «Pot of Greed» finiscono qui */
+    const intero = riconosciEsatto(r);
+    if (intero.stato !== "ok" && soloParoleDiSezione(r)) { dentroSide(r); saltate++; continue; }
+    /* il titolo in cima («Mazzo Exodia — lista di Marti») dà il nome al mazzo */
+    if (intero.stato !== "ok" && nome === null && !voci.length
+        && /^(?:mazzo|deck|lista|decklist)\b/i.test(r) && r.split(/\s+/).length > 1) {
+      nome = r; saltate++; continue;
+    }
+    const pezzi = intero.stato === "ok" ? [r] : spezzaRiga(r);
     const ultimo = pezzi[pezzi.length - 1];
     for (const pezzo of pezzi) {
-      const pulito = pezzo.replace(CODICE_SET, "").trim();
-      /* prima il nome così com'è: «7 Colored Fish» e «7» sono carte vere */
-      let ris = riconosci(pulito), qta = 1, grezzo = pulito;
-      if (ris.stato !== "ok" && /^\d{6,9}$/.test(pulito)) {     // un .ydk: solo codici
+      /* prima il nome così com'è, ma solo esatto: «7 Colored Fish» e «7» sono
+         carte vere, mentre «Pot of Greed (3)» è una carta più una quantità */
+      let ris = riconosciEsatto(pezzo), qta = 1, grezzo = pezzo;
+      if (ris.stato !== "ok" && /^\d{6,9}$/.test(pezzo)) {     // un .ydk: solo codici
         indiciNomi();
-        const k = PER_ID.get(pulito);
+        const k = PER_ID.get(pezzo) !== undefined ? PER_ID.get(pezzo) : PER_ID.get(String(+pezzo));
         if (k !== undefined) ris = { stato: "ok", k };
       }
       if (ris.stato !== "ok") {
-        const [q, resto] = staccaQuantita(pulito);
+        const [q, resto] = staccaQuantita(pezzo);
         if (q < 1 || q > 99 || !resto.trim()) { saltate++; continue; }
-        const r2 = riconosci(resto.replace(CODICE_SET, "").trim());
+        const r2 = riconosci(resto.trim());
         /* la coda condivisa si prova solo su una riga davvero spezzata */
         const r3 = r2.stato === "ignota" && pezzi.length > 1 && pezzo !== ultimo
-          ? completaConCoda(resto.trim(), staccaQuantita(ultimo.replace(CODICE_SET, "").trim())[1].trim())
+          ? completaConCoda(resto.trim(), staccaQuantita(ultimo)[1].trim())
           : null;
         ris = r3 || r2; qta = q; grezzo = resto.trim();
       }
+      /* una frase di discorso non è una carta scritta male: si lascia perdere in
+         silenzio (il nome più lungo dell'archivio è di nove parole) */
+      if (ris.stato === "ignota" &&
+          (grezzo.split(/\s+/).length >= 10 || /[?!]\s*$/.test(grezzo) && grezzo.split(/\s+/).length >= 6)) {
+        saltate++; continue;
+      }
+      if (nelSide) { side += qta; continue; }
       aggiungiVoce(qta, grezzo, ris);
     }
   }
-  return { nome, voci, saltate };
+  return { nome, voci, saltate, side };
 }
 
 /* ---- che mazzo ne viene fuori ---- */
@@ -202,14 +333,17 @@ function leggiLista(testo) {
    della carta più recente. È il senso di questa app — una ricetta vive dentro
    una saga — e risparmia all'utente di andarla a cercare. */
 function riassuntoLettura(l, scelte) {
-  const carte = [], tagliate = [], ignote = [], daScegliere = [];
+  const carte = [], tagliate = [], ignote = [], daScegliere = [], interpretate = [];
   for (let i = 0; i < l.voci.length; i++) {
     const v = l.voci[i];
-    const k = v.stato === "ok" ? v.k : (scelte && scelte[i] !== undefined ? scelte[i] : undefined);
+    const scelto = scelte && scelte[i] !== undefined ? scelte[i] : undefined;
+    const k = scelto !== undefined ? scelto
+      : (v.stato === "ok" || v.stato === "vicina") ? v.k : undefined;
     if (k === undefined) {
       (v.stato === "scelta" ? daScegliere : ignote).push({ i, v });
       continue;
     }
+    if (v.stato === "vicina" && scelto === undefined) interpretate.push({ i, v, k });
     const qta = Math.min(3, v.qta);
     if (v.qta > 3) tagliate.push({ nome: CARTE[k][N], chieste: v.qta });
     carte.push({ k, qta });
@@ -220,7 +354,7 @@ function riassuntoLettura(l, scelte) {
   /* una carta senza data di uscita nota non può stringere l'epoca: conta come «tutto» */
   const epoca = chiavi.length
     ? chiavi.reduce((a, k) => Math.max(a, CARTE[k][T] < 0 ? ULTIMA : CARTE[k][T]), 0) : ULTIMA;
-  return { carte, tagliate, ignote, daScegliere, main, extra, epoca };
+  return { carte, tagliate, ignote, daScegliere, interpretate, main, extra, epoca };
 }
 
 function creaDaLettura(nome, cursore, r) {
@@ -293,15 +427,28 @@ function vistaLetto() {
         : `<div><button class="chip spenta" data-togli-voce="${i}">Va bene, lasciala fuori</button></div>`}
         </div>`).join("")}</div>` : "";
 
+    const letteCosi = r.interpretate.length ? `<div class="avviso ok">
+      ${r.interpretate.length === 1 ? "Una carta era scritta un po' diversa e l'ho interpretata"
+        : `${r.interpretate.length} carte erano scritte un po' diverse e le ho interpretate`}.
+      Se ho sbagliato, tocca quella giusta.
+      ${r.interpretate.map(({ i, v, k }) => `<div class="ignota"><b>${esc(v.testo)}</b> →
+        <span class="chip">${esc(CARTE[k][N])}</span>
+        <div>${v.scelte.filter(x => x !== k).map(x => `<button class="chip spenta" data-scelta="${i}:${x}">
+          ${esc(CARTE[x][N])}</button>`).join("")}
+          <button class="chip spenta" data-togli-voce="${i}">Nessuna</button></div></div>`).join("")}</div>` : "";
+
     const tagliate = r.tagliate.length ? `<div class="avviso ok">Portate a 3 copie, che è il massimo:
       ${r.tagliate.map(t => `${esc(t.nome)} (ne chiedeva ${t.chieste})`).join(" · ")}</div>` : "";
 
-    if (!totale && !r.ignote.length && !r.daScegliere.length)
+    if (!totale && !r.ignote.length && !r.daScegliere.length && !r.interpretate.length)
       return `<p class="vuoto">In quel testo non ho trovato nessuna carta.<br>
         Controlla di aver incollato la lista giusta.</p>
         <button class="azione second" data-az="indietro">Torna a incollare</button>`;
 
-    return `${scelte}${ignote}${tagliate}
+    return `${scelte}${ignote}${letteCosi}${tagliate}
+      ${l.side ? `<p class="nota">Ho lasciato fuori ${num(l.side)}
+        ${plurale(l.side, "carta del Side Deck", "carte del Side Deck")}: in questo gioco
+        il Side Deck non c'è.</p>` : ""}
       ${l.saltate ? `<p class="nota">Ho saltato ${l.saltate}
         ${plurale(l.saltate, "riga che non era una carta", "righe che non erano carte")}
         (intestazioni, conteggi, righe vuote).</p>` : ""}
