@@ -10,7 +10,10 @@ const nuovaQui = k => epocaAttiva() && dentro(k) &&
 
 function cartaHTML(k) {
   const c = CARTE[k], m = mazzoAperto();
-  const fuori = !dentro(k);
+  /* Con un mazzo aperto la lente è la SUA epoca, la stessa che sceglie le carte
+     dell'elenco e che colora le righe dentro il mazzo: altrimenti il selettore
+     sbiadisce carte che il mazzo considera perfettamente dentro. */
+  const fuori = m ? !dentroA(k, m.cursore) : !dentro(k);
   const col = CORNICE[cornice(c)] ? CORNICE[cornice(c)][1] : "transparent";
   const nuova = nuovaQui(k);
   return `<div class="carta${fuori ? " fuori" : ""}">

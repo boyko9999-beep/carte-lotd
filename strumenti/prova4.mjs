@@ -70,7 +70,32 @@ await T('«Togli tutti i filtri» non tocca l\'epoca di un mazzo', async () => {
      (await txt('.epoca-barra .val')).includes('Duel Monsters'), await txt('.epoca-barra .val'));
 });
 
+await T('«solo le nuove» non entra di nascosto in un mazzo', async () => {
+  // percorso: Nuovo mazzo -> accendi «solo le nuove» -> Crea
+  await vaiTab('mazzi');
+  await page.click('[data-nuovo]'); await page.waitForTimeout(250);
+  await pannello(true);
+  const tog = await page.$('[data-az="solo-nuove"]');
+  ok('nella schermata «Nuovo mazzo» il pulsante c\'è', !!tog);
+  if (tog) { await tog.click(); await page.waitForTimeout(200); }
+  await pannello(false);
+  await page.click('[data-az="crea"]'); await page.waitForTimeout(350);
+  const sbiadite = (await page.$$('.carta.fuori')).length;
+  ok('nel selettore nessuna carta è sbiadita per sbaglio', sbiadite === 0, sbiadite + ' sbiadite');
+  const attivi = await page.evaluate(() => [...document.querySelectorAll('[data-piu]')].filter(b => !b.disabled).length);
+  ok('tutte aggiungibili', attivi > 0, attivi + ' «+» attivi');
+  await page.click('[data-az="indietro"]'); await page.waitForTimeout(250);
+  page.on('dialog', d => d.accept());
+  await page.evaluate(() => { window.confirm = () => true; });
+  await page.click('[data-az="elimina"]'); await page.waitForTimeout(400);
+});
+
 await T('dentro un mazzo non c\'è «solo le nuove»', async () => {
+  await vaiTab('mazzi');
+  await page.click('[data-nuovo]'); await page.waitForTimeout(250);
+  await pannello(false);
+  await page.click('.filtri [data-tacca]'); await page.waitForTimeout(200);
+  await page.click('[data-az="crea"]'); await page.waitForTimeout(350);
   await pannello(true);
   ok('il pannello non offre «solo le nuove» in un mazzo', !(await page.$('[data-az="solo-nuove"]')));
   await pannello(false);

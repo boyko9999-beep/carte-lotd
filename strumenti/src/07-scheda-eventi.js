@@ -176,6 +176,7 @@ document.addEventListener("click", e => {
       const nome = (document.getElementById("nm") || {}).value || STATO.nomeNuovo || "";
       const nuovo = nuovoMazzo(nome.trim() || "Mazzo " + (MAZZI.length + 1), STATO.cursore);
       STATO.mazzo = nuovo.id;
+      STATO.soloNuove = false;   // dentro un mazzo l'unica epoca che conta è la sua
       STATO.nomeNuovo = "";
       return vaiA({ schermata: "scegli", qSel: "" });
     }
