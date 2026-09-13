@@ -64,6 +64,12 @@ gioca; con un tocco diventa una tua ricetta, con la lista della spesa per andare
 a prendere le carte. L'archivio non dichiara quante copie ci siano nella scatola,
 quindi si parte con un esemplare per carta.
 
+Ogni riga dice **Main ed Extra**: 52 prodotti su 120 contengono carte da Extra
+Deck, e c'è un filtro per vederli. Gli altri 68 non ne hanno nessuna — non è una
+mancanza dell'app: i mazzi fino al 2007 sono usciti quando l'Extra Deck quasi non
+esisteva, e altri (i Monarch, gli Ingranaggi Antichi) sono pensati per giocare
+senza. Aprendone uno, la sezione Extra Deck c'è lo stesso e lo dice.
+
 Ogni mazzo mostra **la sua scatola** (da yugipedia, come i ritratti dei
 duellanti): piccola nell'elenco — chiesta a 120 px, 50 KB invece di 190 — e
 grande nella schermata del prodotto. Se l'immagine non arriva resta il quadretto
@@ -174,6 +180,6 @@ node strumenti/prova10-incolla.mjs  # lista incollata: lettura, nomi, epoca, cre
 node strumenti/prova11-ufficiali.mjs # mazzi ufficiali e pagina del database di Konami
 ```
 
-367 controlli su un Chromium headless. La prova 5 misura anche i tempi: avvio
+376 controlli su un Chromium headless. La prova 5 misura anche i tempi: avvio
 sotto i 200 ms, ricerca su 10.026 carte sotto il mezzo secondo, e il pulsante
 «Mostra altre carte» che non rallenta man mano che la griglia cresce.

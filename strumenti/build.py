@@ -438,6 +438,9 @@ def mazzi_ufficiali():
 
 # i nomi delle carte del gioco, per ritrovarli fra quelli dei prodotti veri
 DA_NOME = {normalizza(c[0]): i for i, c in enumerate(CARTE)}
+CORNICI_EXTRA_IDX = {i for i, f in enumerate(frames)
+                     if f in ("fusion", "synchro", "xyz", "link",
+                              "fusion_pendulum", "synchro_pendulum", "xyz_pendulum")}
 UFFICIALI = []
 for m in mazzi_ufficiali():
     dentro, fuori_gioco = [], 0
@@ -450,13 +453,18 @@ for m in mazzi_ufficiali():
         else: dentro.append(k)
     # i bundle da una o due carte non sono mazzi
     if len(set(dentro)) < 20: continue
+    # quante di queste carte finiscono nell'Extra Deck: si dice nell'elenco,
+    # perché è la prima cosa che si vuole sapere di un mazzo già fatto
+    extra = sum(1 for k in set(dentro) if CARTE[k][2] in CORNICI_EXTRA_IDX)
     UFFICIALI.append({"n": m["nome"], "it": m["it"], "s": m["sigla"], "d": m["data"],
                       "c": sorted(set(dentro)), "f": fuori_gioco, "i": m.get("img", ""),
+                      "e": extra,
                       "g": (0 if m["tcg"] else 1) + (0 if m["tipo"] == "structure" else 2)})
 UFFICIALI.sort(key=lambda u: (u["d"], u["n"]))
 print("mazzi ufficiali:", len(UFFICIALI),
       "· di cui solo OCG:", sum(1 for u in UFFICIALI if u["g"] & 1),
       "· starter:", sum(1 for u in UFFICIALI if u["g"] & 2),
+      "· con Extra Deck:", sum(1 for u in UFFICIALI if u["e"]),
       "· carte fuori dal gioco in tutto:", sum(u["f"] for u in UFFICIALI))
 
 # ---------------------------------------------------------------- controlli

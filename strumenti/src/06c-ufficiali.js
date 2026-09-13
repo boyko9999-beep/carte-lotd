@@ -36,7 +36,7 @@ function scatolaHTML(u, cls) {
 const soloOCG = u => !!(u.g & 1);
 const eStarter = u => !!(u.g & 2);
 const FILTRI_UFF = [["tutti", "Tutti"], ["structure", "Structure Deck"],
-  ["starter", "Starter Deck"], ["ocg", "Usciti solo in Giappone"]];
+  ["starter", "Starter Deck"], ["extra", "Con Extra Deck"], ["ocg", "Usciti solo in Giappone"]];
 
 /* L'impronta del prodotto: nome, nome italiano, sigla, anno. Le CARTE dentro
    non stanno qui — quelle si cercano col motore vero, che sa di archetipi e di
@@ -59,6 +59,7 @@ function vistaUfficiali() {
     const chiavi = q ? radici(q) : [];
     const f = STATO.filtroUff || "tutti";
     const dentroFiltro = u => f === "tutti" || (f === "ocg" ? soloOCG(u)
+      : f === "extra" ? u.e > 0
       : f === "starter" ? eStarter(u) : !eStarter(u));
 
     let scelti = UFFICIALI.map((u, i) => ({ u, i })).filter(x => dentroFiltro(x.u));
@@ -97,8 +98,9 @@ function vistaUfficiali() {
         ${scatolaHTML(u)}
         <span style="min-width:0"><span class="nome">${esc(nomeUfficiale(u))}</span>
         <small>${esc(u.d.slice(0, 4))} · ${eStarter(u) ? "Starter" : "Structure"} Deck${
-          soloOCG(u) ? " · solo Giappone" : ""} · ${num(u.c.length)} carte${
+          soloOCG(u) ? " · solo Giappone" : ""}${
           u.f ? ` · ${num(u.f)} non ${u.f === 1 ? "c'è" : "ci sono"} in questo gioco` : ""}</small>
+        <small>Main ${num(u.c.length - u.e)}${u.e ? ` · Extra ${num(u.e)}` : " · senza Extra Deck"}</small>
         ${x.quante ? `<small class="bene">${num(x.quante)}
           ${plurale(x.quante, "carta", "carte")} per «${esc(q)}»</small>` : ""}
         ${epocaAttiva() ? `<small class="${qui === u.c.length ? "bene" : qui ? "" : "male"}">${
@@ -108,7 +110,11 @@ function vistaUfficiali() {
     return html + `<p class="nota">Sono i prodotti veri, non buste del gioco: qui dentro trovi
       cosa contengono e da che epoca si giocano. Ci sono anche quelli usciti solo in Giappone,
       perché le carte poi sono le stesse. Le copie non sono dichiarate dall'archivio,
-      quindi la ricetta parte con un esemplare per carta.</p>`;
+      quindi la ricetta parte con un esemplare per carta.</p>
+      <p class="nota">Sessantotto di questi prodotti non contengono nessuna carta da Extra Deck:
+      non è una dimenticanza, è come sono fatte le scatole — i mazzi fino al 2007 sono usciti
+      quando l'Extra Deck quasi non esisteva, e altri (i Monarch, gli Ingranaggi Antichi) sono
+      pensati per giocare senza.</p>`;
   };
   return {
     titolo: "Mazzi ufficiali", indietro: true,

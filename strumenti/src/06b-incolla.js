@@ -795,7 +795,10 @@ function vistaLetto() {
       ${main.length ? main.map(x => rigaLetta(x.k, x.qta, x.voci)).join("")
         : `<p class="vuoto">Niente nel Main.</p>`}
       ${extra.length ? `<div class="sezione"><h3>Extra Deck</h3><small>${r.extra} carte</small></div>`
-        + extra.map(x => rigaLetta(x.k, x.qta, x.voci)).join("") : ""}
+        + extra.map(x => rigaLetta(x.k, x.qta, x.voci)).join("")
+        : l.ufficiale != null ? `<div class="sezione"><h3>Extra Deck</h3><small>vuoto</small></div>
+          <p class="nota">Questo prodotto non contiene carte da Extra Deck: non manca niente,
+          è la scatola a essere fatta così. L'Extra lo riempi tu con «＋ Carte».</p>` : ""}
       ${r.tolte.length ? `<div class="sezione"><h3>Tolte</h3>
           <small>${num(r.tolte.length)} ${plurale(r.tolte.length, "carta", "carte")}</small></div>`
         + r.tolte.map(x => rigaLetta(x.k, 0, x.voci, true)).join("") : ""}`;

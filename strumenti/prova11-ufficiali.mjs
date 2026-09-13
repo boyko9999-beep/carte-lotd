@@ -125,11 +125,54 @@ await T('ogni mazzo ha la sua scatola', async () => {
      `${rese.piccole} di ${rese.img}`);
 });
 
+await T('l\'Extra Deck si vede e si porta dietro', async () => {
+  const dati = await page.evaluate(() => {
+    const ex = u => u.c.filter(k => eExtra(CARTE[k])).length;
+    return {
+      conExtra: UFFICIALI.filter(u => u.e > 0).length,
+      contiTorna: UFFICIALI.every(u => u.e === ex(u)),
+      esempi: ['SDRR','SDSB','SDCL','SDMP','SDSE','SDBE'].map(s => {
+        const u = UFFICIALI.find(x => x.s === s); return u ? s + ':' + u.e : s + ':assente'; })
+    };
+  });
+  ok('più di quaranta prodotti hanno un Extra Deck', dati.conExtra >= 40, String(dati.conExtra));
+  ok('il conto dichiarato è quello vero', dati.contiTorna);
+  ok('i mazzi moderni ce l\'hanno', dati.esempi.every(x => +x.split(':')[1] > 0), dati.esempi.join(' '));
+  /* e le carte dell'Extra devono finire davvero nell'Extra del mazzo creato */
+  await page.evaluate(() => { apriUfficiale(UFFICIALI.findIndex(u => u.s === 'SDRR')); });
+  await page.waitForTimeout(500);
+  const prima = await page.evaluate(() => {
+    const r = riassuntoLettura(STATO.lettura, STATO.scelteLettura);
+    return { extra: r.extra, sezione: /Extra Deck/.test(document.querySelector('#corpo').innerText) };
+  });
+  ok('il resoconto mostra la sezione Extra', prima.sezione && prima.extra === 6,
+     JSON.stringify(prima));
+  await page.click('[data-az="crea-lista"]'); await page.waitForTimeout(600);
+  const m = await page.evaluate(() => { const m = mazzoAperto();
+    return { extra: conta(m, true), quali: elencoZona(m, true).length }; });
+  ok('e il mazzo nasce con le sei carte nell\'Extra', m.extra === 6 && m.quali === 6,
+     JSON.stringify(m));
+  await page.click('[data-az="indietro"]'); await page.waitForTimeout(300);
+  await vaiAMazzi();
+  await page.click('[data-az="ufficiali"]'); await page.waitForTimeout(300);
+});
+
+await T('un prodotto senza Extra Deck lo dice, invece di tacere', async () => {
+  await page.evaluate(() => { apriUfficiale(UFFICIALI.findIndex(u => u.s === 'SR01')); });
+  await page.waitForTimeout(500);
+  const t = await corpo();
+  ok('c\'è comunque la sezione', /Extra Deck/.test(t));
+  ok('e spiega che è la scatola a essere così',
+     /non contiene carte da Extra Deck/.test(t), t.slice(-120));
+  await page.click('[data-az="indietro"]'); await page.waitForTimeout(400);
+});
+
 await T('i filtri dividono structure, starter e giapponesi', async () => {
   const conta = async f => { await page.click(`[data-fuff="${f}"]`); await page.waitForTimeout(350);
     return page.evaluate(() => document.querySelectorAll('[data-uff]').length); };
   const structure = await conta('structure'), starter = await conta('starter'),
-        ocg = await conta('ocg'), tutti = await conta('tutti');
+        ocg = await conta('ocg'), extra = await conta('extra'), tutti = await conta('tutti');
+  ok('«con Extra Deck» ne mostra una parte', extra > 0 && extra < tutti, `${extra} di ${tutti}`);
   ok('structure + starter fanno il totale', structure + starter === tutti,
      `${structure} + ${starter} = ${tutti}`);
   ok('i giapponesi sono una parte', ocg > 0 && ocg < tutti, `${ocg} di ${tutti}`);
