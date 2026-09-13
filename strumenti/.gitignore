@@ -1,0 +1,3 @@
+# sorgenti scaricate da build.py: si riscaricano da sole, non vanno versionate
+sheet.csv
+full.json
