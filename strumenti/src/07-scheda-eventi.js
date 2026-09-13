@@ -73,6 +73,7 @@ function schermataCorrente() {
     case "spesa": return vistaSpesa();
     case "esporta": return vistaEsporta();
     case "incolla": return vistaIncolla();
+    case "ufficiali": return vistaUfficiali();
     case "letto": return vistaLetto();
   }
   const v = STATO.vista === "carte" ? vistaCarte()
@@ -92,7 +93,13 @@ function indietro() {
     case "spesa": case "esporta": return vaiA({ schermata: "mazzo" });
     case "mazzo": return chiudiMazzo();
     /* dal resoconto si torna al testo, che resta lì: si corregge e si rilegge */
-    case "letto": esciDalContesto(); return vaiA({ schermata: "incolla" });
+    /* da un mazzo ufficiale si torna all'elenco, da una lista incollata al testo */
+    case "letto": {
+      const uff = STATO.lettura && STATO.lettura.ufficiale != null;
+      esciDalContesto();
+      return vaiA({ schermata: uff ? "ufficiali" : "incolla" });
+    }
+    case "ufficiali": return vaiA({ schermata: null, vista: "mazzi" });
     case "incolla": esciDalContesto(); return vaiA({ schermata: null, vista: "mazzi" });
   }
   vaiA({ schermata: null });
@@ -156,6 +163,7 @@ document.addEventListener("click", e => {
   if ((t = el("[data-saga]"))) return impostaCursore(SAGHE[+t.dataset.saga].ultima);
   if ((t = el("[data-tacca]"))) { if (t.dataset.tacca !== "") return impostaCursore(+t.dataset.tacca); return; }
   if ((t = el("[data-mazzo]"))) return apriMazzo(t.dataset.mazzo);
+  if ((t = el("[data-uff]"))) return apriUfficiale(+t.dataset.uff);
   if ((t = el("[data-nuovo]"))) {
     entraInContesto(); STATO.cursore = +t.dataset.nuovo; STATO.soloNuove = false;
     return vaiA({ schermata: "nuovo" });
@@ -225,18 +233,15 @@ document.addEventListener("click", e => {
     }
     case "scegli": return vaiA({ schermata: "scegli", qSel: "", tipiAttivi: new Set() });
     case "incolla": esciDalContesto(); return vaiA({ schermata: "incolla", mazzo: null });
+    case "ufficiali": esciDalContesto(); return vaiA({ schermata: "ufficiali", mazzo: null, qUff: "" });
     case "leggi": {
       const campo = document.getElementById("lista");
       if (campo) STATO.testoLista = campo.value;
-      STATO.lettura = leggiLista(STATO.testoLista);
-      STATO.scelteLettura = {};
-      STATO.nomeLettura = STATO.lettura.nome || "";
-      /* il mazzo nasce nell'epoca più stretta in cui ci sta tutto: è quella che
-         serve per giocarlo davvero. L'epoca di prima si ritrova uscendo. */
-      entraInContesto();
-      STATO.cursore = riassuntoLettura(STATO.lettura, {}).epoca;
-      STATO.soloNuove = false;
-      return vaiA({ schermata: "letto" });
+      STATO.erroreRete = "";
+      /* un indirizzo invece di una lista: si prova a leggere la pagina */
+      const indirizzo = soloIndirizzo(STATO.testoLista);
+      if (indirizzo) return leggiIndirizzo(indirizzo);
+      return apriLettura(leggiLista(STATO.testoLista));
     }
     case "crea-lista": {
       const l = STATO.lettura;

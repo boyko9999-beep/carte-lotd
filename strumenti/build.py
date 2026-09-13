@@ -274,6 +274,85 @@ def ritratti():
 RITRATTI = ritratti()
 print("ritratti:", len(RITRATTI), "su", len(CANON))
 
+# -------------------------------------------------------- mazzi ufficiali
+# Structure Deck e Starter Deck usciti fino al 2019. Nel gioco non esistono
+# come buste — sono prodotti veri — ma sono ricette gia' fatte da cui partire,
+# e dicono quali carte cercare in quali duelli.
+UFF_FILE = "ufficiali.json"
+
+def apri_json(url, timeout=180):
+    req = urllib.request.Request(url, headers={"User-Agent": "carte-lotd/2.0"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.load(r)
+
+IT_FILE = "ufficiali-it.json"
+
+def nomi_italiani_mazzi(titoli):
+    """Il nome italiano del prodotto, dall'infobox di yugipedia.
+    Una pagina per richiesta: l'API non manda il testo di piu' pagine insieme."""
+    if os.path.exists(IT_FILE):
+        return json.load(open(IT_FILE, encoding="utf-8"))
+    fuori = {}
+    for t in titoli:
+        q = urllib.parse.urlencode({"action": "parse", "format": "json", "formatversion": "2",
+                                    "redirects": "1", "prop": "wikitext", "page": t})
+        try:
+            d = apri_json("https://yugipedia.com/api.php?" + q, 60)
+            testo = d["parse"]["wikitext"]
+        except Exception:
+            continue
+        m = re.search(r"^\|\s*it_name\s*=\s*(.+?)\s*$", testo, re.M)
+        if m and m.group(1): fuori[t] = m.group(1)
+    json.dump(fuori, open(IT_FILE, "w", encoding="utf-8"), ensure_ascii=False)
+    print("  nomi italiani trovati:", len(fuori), "su", len(titoli), file=sys.stderr)
+    return fuori
+
+def mazzi_ufficiali():
+    if os.path.exists(UFF_FILE):
+        return json.load(open(UFF_FILE, encoding="utf-8"))
+    print("scarico i mazzi ufficiali ...", file=sys.stderr)
+    tutti = apri_json("https://db.ygoprodeck.com/api/v7/cardsets.php")
+    scelti = [s for s in tutti
+              if re.search(r"(starter|structure) deck", s.get("set_name", ""), re.I)
+              and (s.get("tcg_date") or "") and s["tcg_date"] <= "2019-12-31"]
+    scelti.sort(key=lambda s: (s["tcg_date"], s["set_name"]))
+    italiani = nomi_italiani_mazzi([s["set_name"] for s in scelti])
+    out = []
+    for s in scelti:
+        url = ("https://db.ygoprodeck.com/api/v7/cardinfo.php?cardset="
+               + urllib.parse.quote(s["set_name"]))
+        try:
+            carte = [c["name"] for c in apri_json(url)["data"]]
+        except Exception as e:
+            print("  salto", s["set_name"], e, file=sys.stderr); continue
+        out.append({"nome": s["set_name"], "it": italiani.get(s["set_name"], ""),
+                    "sigla": s.get("set_code", ""), "data": s["tcg_date"],
+                    "carte": sorted(set(carte))})
+        print(f"  {s['tcg_date']} {s['set_name']}: {len(carte)}", file=sys.stderr)
+    json.dump(out, open(UFF_FILE, "w", encoding="utf-8"), ensure_ascii=False)
+    return out
+
+# i nomi delle carte del gioco, per ritrovarli fra quelli dei prodotti veri
+DA_NOME = {normalizza(c[0]): i for i, c in enumerate(CARTE)}
+MAZZI_UFF = mazzi_ufficiali()
+ITALIANI = nomi_italiani_mazzi([m["nome"] for m in MAZZI_UFF])
+UFFICIALI = []
+for m in MAZZI_UFF:
+    m["it"] = ITALIANI.get(m["nome"], m.get("it") or "")
+    dentro, fuori = [], 0
+    for nome in m["carte"]:
+        k = DA_NOME.get(normalizza(nome))
+        if k is None: fuori += 1
+        else: dentro.append(k)
+    # le "Special Edition" da una o due carte sono bundle promozionali, non mazzi
+    if len(dentro) < 20: continue
+    UFFICIALI.append({"n": m["nome"], "it": m["it"], "s": m["sigla"], "d": m["data"],
+                      "c": sorted(set(dentro)), "f": fuori})
+print("mazzi ufficiali:", len(UFFICIALI),
+      "· carte in media nel gioco:",
+      round(sum(len(u["c"]) for u in UFFICIALI) / max(1, len(UFFICIALI)), 1),
+      "· fuori dal gioco in tutto:", sum(u["f"] for u in UFFICIALI))
+
 # ---------------------------------------------------------------- controlli
 buste = [l for l in LUOGHI if l["tipo"] == "busta"]
 assert len(buste) == 33, f"buste attese 33, trovate {len(buste)}"
@@ -296,7 +375,7 @@ print("cumulate fine saga:", {SAGHE[i]["nome"]: cum[SAGHE[i]["ultima"]] for i in
 
 payload = {"tacche": TACCHE, "saghe": SAGHE, "luoghi": LUOGHI,
            "frames": frames, "archetipi": archi, "razze": razze, "attributi": attri,
-           "carte": CARTE, "ritratti": RITRATTI}
+           "carte": CARTE, "ritratti": RITRATTI, "ufficiali": UFFICIALI}
 raw = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
 open(OUT, "w", encoding="utf-8").write(raw)
 print(f"{OUT}: {len(raw.encode()):,} byte  ·  gzip {len(gzip.compress(raw.encode())):,} byte")

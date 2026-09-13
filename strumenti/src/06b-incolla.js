@@ -202,25 +202,26 @@ const NUMERI_IT = { una: 1, uno: 1, un: 1, due: 2, tre: 3 };
    segno esplicito, per ultima «3 Nome», che è anche l'inizio di «3-Hump Lacooda».
    «Harpie Lady 3» invece è un nome intero: un numero in coda vale come quantità
    solo se è staccato da una tabulazione o da più spazi. */
+/* restituisce [quantità, resto, esplicita] */
 function staccaQuantita(t) {
   let m;
   /* la «x» del moltiplicatore o sta attaccata al numero («3x Nome») o ha uno
      spazio dopo («3 x Nome»): senza questa distinzione «2 XX-Saber Faultroll»
      diventava due copie di «X-Saber Faultroll», che è un'altra carta */
-  if ((m = t.match(/^(\d{1,2})[x×*]\s*(.+)$/i))) return [+m[1], m[2]];
-  if ((m = t.match(/^(\d{1,2})\s*[x×*]\s+(.+)$/i))) return [+m[1], m[2]];
-  if ((m = t.match(/^[x×]\s*(\d{1,2})[\s.:-]+(.+)$/i))) return [+m[1], m[2]];
-  if ((m = t.match(/^(\d{1,2})\s+(?:copie|copia|volte)\s+(?:di\s+)?(.+)$/i))) return [+m[1], m[2]];
-  if ((m = t.match(/^(una|uno|un|due|tre)\s+(?:copie|copia)\s+di\s+(.+)$/i))) return [NUMERI_IT[m[1].toLowerCase()], m[2]];
-  if ((m = t.match(/^(una|uno|un|due|tre)\s+(.+)$/i))) return [NUMERI_IT[m[1].toLowerCase()], m[2]];
-  if ((m = t.match(/^(.+?)\s*[([]\s*[x×*]\s*(\d{1,2})\s*[)\]]$/i))) return [+m[2], m[1]];
-  if ((m = t.match(/^(.+?)\s*[x×*]\s*(\d{1,2})$/i))) return [+m[2], m[1]];
-  if ((m = t.match(/^(.+?)\s*[([]\s*(\d{1,2})\s*[)\]]$/))) return [+m[2], m[1]];
-  if ((m = t.match(/^(.+?)\s*:\s*(\d{1,2})$/))) return [+m[2], m[1]];
-  if ((m = t.match(/^(.+?)[\s.·•_]{2,}(\d{1,2})$/))) return [+m[2], m[1]];
-  if ((m = t.match(/^(.+?)(?:\t+|\s{2,})(\d{1,2})$/))) return [+m[2], m[1]];
-  if ((m = t.match(/^(\d{1,2})[\s.:-]+(.+)$/))) return [+m[1], m[2]];
-  return [1, t];
+  if ((m = t.match(/^(\d{1,2})[x×*]\s*(.+)$/i))) return [+m[1], m[2], true];
+  if ((m = t.match(/^(\d{1,2})\s*[x×*]\s+(.+)$/i))) return [+m[1], m[2], true];
+  if ((m = t.match(/^[x×]\s*(\d{1,2})[\s.:-]+(.+)$/i))) return [+m[1], m[2], true];
+  if ((m = t.match(/^(\d{1,2})\s+(?:copie|copia|volte)\s+(?:di\s+)?(.+)$/i))) return [+m[1], m[2], true];
+  if ((m = t.match(/^(una|uno|un|due|tre)\s+(?:copie|copia)\s+di\s+(.+)$/i))) return [NUMERI_IT[m[1].toLowerCase()], m[2], true];
+  if ((m = t.match(/^(una|uno|un|due|tre)\s+(.+)$/i))) return [NUMERI_IT[m[1].toLowerCase()], m[2], true];
+  if ((m = t.match(/^(.+?)\s*[([]\s*[x×*]\s*(\d{1,2})\s*[)\]]$/i))) return [+m[2], m[1], true];
+  if ((m = t.match(/^(.+?)\s*[x×*]\s*(\d{1,2})$/i))) return [+m[2], m[1], true];
+  if ((m = t.match(/^(.+?)\s*[([]\s*(\d{1,2})\s*[)\]]$/))) return [+m[2], m[1], true];
+  if ((m = t.match(/^(.+?)\s*:\s*(\d{1,2})$/))) return [+m[2], m[1], true];
+  if ((m = t.match(/^(.+?)[\s.·•_]{2,}(\d{1,2})$/))) return [+m[2], m[1], true];
+  if ((m = t.match(/^(.+?)(?:\t+|\s{2,})(\d{1,2})$/))) return [+m[2], m[1], true];
+  if ((m = t.match(/^(\d{1,2})[\s.:-]+(.+)$/))) return [+m[1], m[2], true];
+  return [1, t, false];
 }
 
 /* Quello che resta attaccato al nome nelle liste vere: il codice del set, la
@@ -271,11 +272,59 @@ function spezzaRiga(r) {
 const ENTITA = [[/&amp;/gi, "&"], [/&quot;/gi, '"'], [/&(?:apos|#0?39);/gi, "'"],
   [/&nbsp;/gi, " "], [/&#x200b;/gi, ""], [/&#8203;/gi, ""], [/&[a-z]{2,6};/gi, ""]];
 
+/* Le intestazioni di ZONA: dove comincia e dove finisce l'elenco vero.
+   Servono a ritagliare una pagina intera copiata dal sito di Konami, che porta
+   dentro il menu, i commenti e — se è aperta la vista dettagliata — il mazzo
+   una seconda volta, con tutti i testi delle carte. */
+const ZONA = /^(?:carte mostro|carte magia|carte trappola|monster cards?|spell cards?|trap cards?|main deck|extra deck|side deck|deck principale)\b/i;
+const ETICHETTA_ZONA = r => r.toLowerCase().replace(/[^a-z ]+/g, "").trim();
+/* le targhette che il sito mette fra il nome e la quantità */
+const TARGHETTA = /^(?:carte |carta )?(?:limitate?|semi-?limitate?|proibite?|limited|semi-?limited|forbidden)$/i;
+
+function tagliaPagina(righe) {
+  const trovate = righe.map(r => r.trim()).map(r => ZONA.test(r) ? ETICHETTA_ZONA(r) : null);
+  const viste = new Map();
+  let inizio = -1, fine = righe.length;
+  for (let i = 0; i < trovate.length; i++) {
+    const z = trovate[i];
+    if (!z) continue;
+    if (inizio < 0) inizio = i;
+    if (viste.has(z)) { fine = i; break; }        // l'elenco ricomincia: il primo basta
+    viste.set(z, i);
+  }
+  /* si taglia davanti solo se davanti c'è davvero della roba estranea */
+  const taglia = viste.size >= 2 && inizio >= 8;
+  return { da: taglia ? inizio : 0, a: fine, testa: taglia ? righe.slice(0, inizio) : [] };
+}
+
+/* i totali che la pagina dichiara: servono a dire se ho letto tutto */
+function totaliDichiarati(righe) {
+  const d = {};
+  for (let i = 0; i < righe.length - 1; i++) {
+    const m = righe[i].trim().match(/tot(?:ale|al)?\b.*\b(main|extra|side)\b/i);
+    const n = righe[i + 1].trim().match(/^(\d{1,3})$/);
+    if (m && n) d[m[1].toLowerCase()] = +n[1];
+  }
+  return Object.keys(d).length ? d : null;
+}
+
 function leggiLista(testo) {
   azzeraScansioni();
-  const righe = String(testo || "").replace(/\r/g, "").split("\n");
+  let righe = String(testo || "").replace(/\r/g, "").split("\n");
+  for (let i = 0; i < righe.length; i++)
+    for (const [re, con] of ENTITA) righe[i] = righe[i].replace(re, con);
+  const taglio = tagliaPagina(righe);
+  const dichiarati = totaliDichiarati(righe);
+  /* il nome del mazzo sta poco sopra la parola «Preferiti» nella pagina di Konami */
+  let nome = null;
+  for (let i = 0; i < taglio.testa.length; i++)
+    if (/^(preferiti|favorites?)$/i.test(taglio.testa[i].trim()))
+      for (let j = i - 1; j >= 0 && j >= i - 3; j--)
+        if (taglio.testa[j].trim()) { nome = taglio.testa[j].trim(); i = taglio.testa.length; break; }
+  righe = righe.slice(taglio.da, taglio.a);
+
   const voci = [], indice = new Map();
-  let nome = null, saltate = 0, side = 0, nelSide = false;
+  let saltate = 0, side = 0, nelSide = false;
 
   const aggiungiVoce = (qta, grezzo, ris) => {
     const chiave = ris.stato === "ok" ? "k" + ris.k : "t" + grezzo.toLowerCase();
@@ -284,11 +333,18 @@ function leggiLista(testo) {
     indice.set(chiave, voci.length);
     voci.push({ qta, testo: grezzo, stato: ris.stato, k: ris.k, scelte: ris.scelte || [] });
   };
+  /* la prossima riga che conta davvero: si saltano le vuote e le targhette */
+  const prossima = i => {
+    for (let j = i; j < righe.length && j < i + 4; j++) {
+      const r = righe[j].trim();
+      if (!r || TARGHETTA.test(r)) continue;
+      return j;
+    }
+    return -1;
+  };
 
-  for (const grezza of righe) {
-    let r = String(grezza).replace(/\u00a0/g, " ");
-    for (const [re, con] of ENTITA) r = r.replace(re, con);
-    r = r.trim();
+  for (let i = 0; i < righe.length; i++) {
+    let r = String(righe[i]).replace(/ /g, " ").trim();
     if (!r || r.startsWith("//")) continue;
     /* i commenti: «# Mazzo di prova» dà il nome, «#main» e «!side» dei .ydk no */
     if (r[0] === "#" || r[0] === "!") {
@@ -304,15 +360,24 @@ function leggiLista(testo) {
     if (PARE_INDIRIZZO.test(r)) { saltate++; continue; }
     const dentroSide = x => { if (SEZIONE_SIDE.test(x)) nelSide = true; else if (SEZIONE_DENTRO.test(x)) nelSide = false; };
     if (SEZIONE.test(r)) { dentroSide(r); saltate++; continue; }
+
     /* la riga intera è già una carta? allora non si spezza e non si interpreta:
        «Adreus, Keeper of Armageddon» e «Pot of Greed» finiscono qui */
     const intero = riconosciEsatto(r);
+    if (intero.stato !== "ok" && soloParoleDiSezione(r)) { dentroSide(r); saltate++; continue; }
+    /* «7» è una carta vera, ma in un elenco numerato è quasi sempre il numero
+       della riga: se subito sotto c'è un nome di carta, è un numero di riga.
+       Senza questo, la pagina di Konami regalava tre copie di «7» al mazzo. */
+    if (intero.stato === "ok" && /^\d{1,3}$/.test(r)) {
+      const j = prossima(i + 1);
+      if (j >= 0 && riconosciEsatto(righe[j].trim().replace(SEGNI_PRIMA, "")
+          .replace(SEGNI_DOPO, "").trim()).stato === "ok") { saltate++; continue; }
+    }
     /* righe senza nemmeno una lettera: righelli, conteggi, numeri sparsi. Si
        scartano DOPO aver provato il nome, perché esiste una carta che si chiama
        «7», e dopo aver provato a staccare la quantità, perché «3 7» sono tre. */
     if (intero.stato !== "ok" && !/[a-z]/i.test(r) && !/^\d{6,9}$/.test(r)
         && riconosciEsatto(staccaQuantita(r)[1].trim()).stato !== "ok") { saltate++; continue; }
-    if (intero.stato !== "ok" && soloParoleDiSezione(r)) { dentroSide(r); saltate++; continue; }
     /* il titolo in cima («Mazzo Exodia — lista di Marti») dà il nome al mazzo */
     if (intero.stato !== "ok" && nome === null && !voci.length
         && /^(?:mazzo|deck|lista|decklist)\b/i.test(r) && r.split(/\s+/).length > 1) {
@@ -323,21 +388,21 @@ function leggiLista(testo) {
     for (const pezzo of pezzi) {
       /* prima il nome così com'è, ma solo esatto: «7 Colored Fish» e «7» sono
          carte vere, mentre «Pot of Greed (3)» è una carta più una quantità */
-      let ris = riconosciEsatto(pezzo), qta = 1, grezzo = pezzo;
+      let ris = riconosciEsatto(pezzo), qta = 1, grezzo = pezzo, esplicita = false;
       if (ris.stato !== "ok" && /^\d{6,9}$/.test(pezzo)) {     // un .ydk: solo codici
         indiciNomi();
         const k = PER_ID.get(pezzo) !== undefined ? PER_ID.get(pezzo) : PER_ID.get(String(+pezzo));
         if (k !== undefined) ris = { stato: "ok", k };
       }
       if (ris.stato !== "ok") {
-        const [q, resto] = staccaQuantita(pezzo);
+        const [q, resto, scritta] = staccaQuantita(pezzo);
         if (q < 1 || q > 99 || !resto.trim()) { saltate++; continue; }
         const r2 = riconosci(resto.trim());
         /* la coda condivisa si prova solo su una riga davvero spezzata */
         const r3 = r2.stato === "ignota" && pezzi.length > 1 && pezzo !== ultimo
           ? completaConCoda(resto.trim(), staccaQuantita(ultimo)[1].trim())
           : null;
-        ris = r3 || r2; qta = q; grezzo = resto.trim();
+        ris = r3 || r2; qta = q; grezzo = resto.trim(); esplicita = scritta;
       }
       /* una frase di discorso non è una carta scritta male: si lascia perdere in
          silenzio (il nome più lungo dell'archivio è di nove parole) */
@@ -345,11 +410,94 @@ function leggiLista(testo) {
           (grezzo.split(/\s+/).length >= 10 || /[?!]\s*$/.test(grezzo) && grezzo.split(/\s+/).length >= 6)) {
         saltate++; continue;
       }
+      /* Carta su una riga, quantità sulla riga dopo: è così che esce il mazzo
+         copiato dalla pagina di Konami, ed è anche il modo in cui si incolla una
+         tabella a due colonne. Solo 1, 2 o 3: più di così non è una quantità. */
+      if (!esplicita && pezzi.length === 1 && ris.stato !== "ignota") {
+        const j = prossima(i + 1);
+        if (j >= 0 && /^[1-3]$/.test(righe[j].trim())) { qta = +righe[j].trim(); i = j; }
+      }
       if (nelSide) { side += qta; continue; }
       aggiungiVoce(qta, grezzo, ris);
     }
   }
-  return { nome, voci, saltate, side };
+  return { nome, voci, saltate, side, dichiarati };
+}
+
+/* =====================================================================
+   La pagina del database di Konami (db.yugioh-card.com)
+
+   Se si incolla un indirizzo invece di una lista, si prova a leggere la
+   pagina. Il sito però non permette a un'altra pagina di leggerlo (è una
+   regola dei browser, non un capriccio), quindi il tentativo va fatto e
+   può fallire: quando fallisce si dice esattamente cosa fare, perché il
+   testo di quella pagina, copiato e incollato, lo si legge benissimo.
+   ===================================================================== */
+const soloIndirizzo = t => {
+  const r = String(t || "").trim();
+  return /^https?:\/\/[^\s]+$/i.test(r) ? r : null;
+};
+const PONTI = [
+  u => u,                                                        // diretto
+  u => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u),
+  u => "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(u)
+];
+async function scaricaPagina(u) {
+  for (const fai of PONTI) {
+    try {
+      const c = typeof AbortController === "function" ? new AbortController() : null;
+      const t = c ? setTimeout(() => c.abort(), 9000) : 0;
+      const r = await fetch(fai(u), c ? { signal: c.signal } : {});
+      if (t) clearTimeout(t);
+      if (!r.ok) continue;
+      const testo = await r.text();
+      if (testo && testo.length > 1500) return testo;
+    } catch (e) { /* il prossimo ponte */ }
+  }
+  return null;
+}
+
+/* La pagina è fatta di tabelle: una per i mostri, le magie, le trappole,
+   l'Extra e il Side. Nome e quantità stanno in due celle, quindi qui non
+   serve indovinare niente. */
+function leggiHtmlKonami(html) {
+  let doc = null;
+  try { doc = new DOMParser().parseFromString(String(html), "text/html"); } catch (e) { return null; }
+  const tabelle = doc ? doc.querySelectorAll("table.deck_list") : [];
+  if (!tabelle.length) return null;
+  const voci = [], indice = new Map(), dichiarati = { main: 0, extra: 0, side: 0 };
+  let side = 0;
+  for (const tab of tabelle) {
+    const zona = (tab.id || "").toLowerCase();
+    const nelSide = zona.indexOf("side") === 0;
+    const conto = tab.querySelector("th.num span");
+    if (conto) {
+      const n = parseInt(conto.textContent, 10) || 0;
+      dichiarati[nelSide ? "side" : zona.indexOf("extra") === 0 ? "extra" : "main"] += n;
+    }
+    for (const tr of tab.querySelectorAll("tr")) {
+      const cella = tr.querySelector("td.card_name");
+      if (!cella) continue;
+      /* il nome pulito sta nello span; il title delle carte limitate porta
+         davanti la targhetta 【Carte Limitate】 */
+      const dentroSpan = cella.querySelector(".icon span") || cella.querySelector("span");
+      const nome = ((dentroSpan && dentroSpan.textContent) || tr.getAttribute("title") || "")
+        .replace(/^【[^】]*】\s*/, "").replace(/\s+/g, " ").trim();
+      if (!nome) continue;
+      const num = tr.querySelector("td.num span");
+      const q = Math.max(1, Math.min(9, parseInt(num && num.textContent, 10) || 1));
+      if (nelSide) { side += q; continue; }
+      const ris = riconosci(nome);
+      const chiave = ris.stato === "ok" ? "k" + ris.k : "t" + nome.toLowerCase();
+      const gia = indice.get(chiave);
+      if (gia !== undefined) { voci[gia].qta += q; continue; }
+      indice.set(chiave, voci.length);
+      voci.push({ qta: q, testo: nome, stato: ris.stato, k: ris.k, scelte: ris.scelte || [] });
+    }
+  }
+  if (!voci.length) return null;
+  const titolo = doc.querySelector("#broad_title h1");
+  return { nome: titolo ? titolo.textContent.trim() : null, voci, saltate: 0, side, dichiarati };
 }
 
 /* ---- che mazzo ne viene fuori ---- */
@@ -403,16 +551,52 @@ function creaDaLettura(nome, cursore, r) {
 /* =====================================================================
    Le due schermate: si incolla, si guarda cosa è venuto fuori, si crea
    ===================================================================== */
+/* Da una lettura si passa sempre di qui: il mazzo nasce nell'epoca più stretta
+   in cui ci sta tutto, che è quella che serve per giocarlo davvero. L'epoca di
+   prima si ritrova uscendo. */
+function apriLettura(l) {
+  STATO.lettura = l;
+  STATO.scelteLettura = {};
+  STATO.nomeLettura = l.nome || "";
+  entraInContesto();
+  STATO.cursore = riassuntoLettura(l, {}).epoca;
+  STATO.soloNuove = false;
+  vaiA({ schermata: "letto" });
+}
+async function leggiIndirizzo(u) {
+  STATO.scaricando = u; STATO.erroreRete = "";
+  render();
+  const html = await scaricaPagina(u);
+  STATO.scaricando = null;
+  const l = html ? (leggiHtmlKonami(html) || leggiLista(html.replace(/<[^>]+>/g, "\n"))) : null;
+  if (!l || !l.voci.length) { STATO.erroreRete = u; return render(); }
+  STATO.testoLista = "";
+  return apriLettura(l);
+}
+
+
 function vistaIncolla() {
-  const corpo = () => `
-    <p class="nota">Incolla una lista di carte: quella sotto un video, quella di un sito,
-      un file <b>.ydk</b>, o un mazzo esportato da qui. Puoi lasciarla com'è — puntini,
-      intestazioni e numeri di sezione li salto io.</p>
+  const corpo = () => {
+    if (STATO.scaricando) return `<p class="nota">Sto provando a leggere la pagina…</p>
+      <p class="vuoto">${esc(STATO.scaricando)}</p>`;
+    return `
+    <p class="nota">Incolla una lista di carte — quella sotto un video, quella di un sito,
+      un file <b>.ydk</b>, un mazzo esportato da qui — oppure <b>l'indirizzo</b> di un mazzo
+      sul database di Konami.</p>
+    ${STATO.erroreRete ? `<div class="avviso">Non sono riuscito a leggere quella pagina.
+      Non dipende da te: il sito di Konami non lascia che sia un'altra pagina a leggerlo.
+      <div>
+        <a class="azione second" href="${esc(STATO.erroreRete)}" target="_blank" rel="noopener">Apri la pagina</a>
+      </div>
+      <p class="spiega">Aprila, seleziona tutto il testo (tieni premuto → «Seleziona tutto»),
+      copia, torna qui e incolla: la lista di quella pagina la leggo per intero, quantità comprese.</p>
+      </div>` : ""}
     <textarea class="campo" id="lista" rows="14" spellcheck="false"
-      placeholder="3x Royal Magical Library&#10;1x Exodia the Forbidden One&#10;&#10;Magie (32)&#10;3x Pot of Greed&#10;…">${esc(STATO.testoLista || "")}</textarea>
+      placeholder="3x Royal Magical Library&#10;1x Exodia the Forbidden One&#10;&#10;Magie (32)&#10;3x Pot of Greed&#10;…&#10;&#10;oppure https://www.db.yugioh-card.com/yugiohdb/member_deck.action?cgid=…">${esc(STATO.testoLista || "")}</textarea>
     <button class="azione" data-az="leggi">Leggi la lista</button>
     <p class="nota">Riconosco i nomi in inglese (quelli stampati sulle carte) e quelli
       italiani ufficiali. Prima di creare il mazzo ti mostro cosa ho capito.</p>`;
+  };
   return { titolo: "Incolla un mazzo", indietro: true, corpo };
 }
 
@@ -480,6 +664,18 @@ function vistaLetto() {
         <button class="azione second" data-az="indietro">Torna a incollare</button>`;
 
     return `${scelte}${ignote}${letteCosi}${tagliate}
+      ${l.ufficiale != null ? `<p class="nota">${l.mancanti
+        ? `${num(l.mancanti)} ${plurale(l.mancanti, "carta del prodotto non esiste", "carte del prodotto non esistono")} in questo gioco.`
+        : "Tutte le carte del prodotto esistono in questo gioco."}
+        L'archivio non dice quante copie ce ne siano nella scatola, quindi si parte con
+        un esemplare per carta: le copie le aggiungi tu con «＋».</p>` : ""}
+      ${l.dichiarati ? (() => {
+        const d = l.dichiarati, torna = (d.main || 0) === r.main && (d.extra || 0) === r.extra;
+        return `<div class="avviso ${torna ? "ok" : ""}">La pagina dichiara
+          Main ${num(d.main || 0)} · Extra ${num(d.extra || 0)}${d.side ? ` · Side ${num(d.side)}` : ""}.
+          Io ho letto Main ${num(r.main)} · Extra ${num(r.extra)}${l.side ? ` · Side ${num(l.side)}` : ""}.
+          ${torna ? "Torna." : "Non torna: guarda qui sotto cosa non ho riconosciuto."}</div>`;
+      })() : ""}
       ${l.side ? `<p class="nota">Ho lasciato fuori ${num(l.side)}
         ${plurale(l.side, "carta del Side Deck", "carte del Side Deck")}: in questo gioco
         il Side Deck non c'è.</p>` : ""}
@@ -497,10 +693,13 @@ function vistaLetto() {
         ${r.epoca < ULTIMA ? `<button class="f" data-tacca="${ULTIMA}" aria-pressed="${ep >= ULTIMA}">Tutto il gioco</button>` : ""}
       </div>
       <p class="nota">${r.epoca >= ULTIMA
-        ? "Qualche carta non ha una data di uscita nota: il mazzo nasce senza limiti di epoca."
+        ? `Ci sono carte dell'ultima epoca del gioco${piuRecente.length
+            ? ` (${esc(piuRecente[0][N])}${piuRecente[0][A] ? ", del " + piuRecente[0][A] : ""})` : ""}:
+            questo mazzo si gioca solo con tutto il gioco acceso.`
         : `È l'epoca più stretta in cui il mazzo ci sta tutto: la carta più recente è
             <b>${esc(piuRecente.length ? piuRecente[0][N] : "")}</b>${
-            piuRecente.length > 1 ? ` (e altre ${piuRecente.length - 1})` : ""}, del
+            piuRecente.length > 1 ? ` (e ${piuRecente.length === 2 ? "un'altra"
+              : "altre " + num(piuRecente.length - 1)})` : ""}, del
             ${piuRecente.length ? piuRecente[0][A] : ""}.${
             ep < r.epoca ? ` <b class="male">Con l'epoca che hai scelto ora, ${
               num(r.carte.filter(x => !dentroA(x.k, ep)).length)} carte restano fuori.</b>` : ""}`}</p>
@@ -516,5 +715,6 @@ function vistaLetto() {
       ${extra.length ? `<div class="sezione"><h3>Extra Deck</h3><small>${r.extra} carte</small></div>`
         + extra.map(x => rigaLetta(x.k, x.qta, x.voci)).join("") : ""}`;
   };
-  return { titolo: "Cosa ho letto", indietro: true, corpo };
+  const u = STATO.lettura.ufficiale != null ? UFFICIALI[STATO.lettura.ufficiale] : null;
+  return { titolo: u ? nomeUfficiale(u) : "Cosa ho letto", indietro: true, corpo };
 }

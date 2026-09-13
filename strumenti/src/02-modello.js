@@ -22,6 +22,11 @@ const LUOGHI = INDICE.luoghi;
 const FRAMES = INDICE.frames;
 const ARCHETIPI = INDICE.archetipi;
 const RITRATTI = INDICE.ritratti;
+/* I 75 Structure Deck e Starter Deck usciti fino al 2019. Nel gioco non
+   esistono come buste — sono prodotti veri — ma sono ricette già fatte:
+   { n: nome, it: nome italiano, s: sigla, d: data, c: [carte], f: quante
+   carte del prodotto non ci sono in questo gioco }. */
+const UFFICIALI = INDICE.ufficiali || [];
 const ULTIMA = TACCHE.length - 1;
 
 /* carte: [nome, idImmagine, cornice, tacca, anno, rara, busta, fonti[], archetipo,
@@ -155,7 +160,8 @@ const STATO = {
   ritorno: null,
   nomeNuovo: "",
   /* la lista incollata e quello che ne ho capito: vivono solo fino alla creazione */
-  testoLista: "", lettura: null, scelteLettura: {}, nomeLettura: "",
+  testoLista: "", lettura: null, scelteLettura: {}, nomeLettura: "", qUff: "",
+  scaricando: null, erroreRete: "",
   avvisoSalvataggio: false
 };
 let MAZZI = [];

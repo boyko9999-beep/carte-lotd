@@ -46,7 +46,9 @@ function vistaMazzi() {
           <div class="saga-t" style="background:${coloreTacca(c)}">＋</div>
           <span><span class="nome">${esc(t)}</span>
           <small>${num(CUM[c])} carte fra cui scegliere</small></span></button>`).join("")}</div>
-      <button class="azione second" data-az="incolla">⇩ Incolla una lista che hai già</button>`;
+      <button class="azione second" data-az="incolla">⇩ Incolla una lista che hai già</button>
+      <button class="azione second" data-az="ufficiali">★ Parti da un mazzo ufficiale
+        (${num(UFFICIALI.length)} Structure e Starter Deck)</button>`;
     return `<div class="duellanti">${MAZZI.slice().sort((a, b) => b.modificato - a.modificato)
       .map(m => {
         const [cl, testo] = semaforo(m), fuori = fuoriEpoca(m).length;
@@ -61,6 +63,8 @@ function vistaMazzi() {
         <button class="azione" data-nuovo="${STATO.cursore}">＋ Nuovo mazzo</button>
         <button class="azione second" data-az="incolla">⇩ Incolla una lista</button>
       </div>
+      <button class="azione second" data-az="ufficiali">★ I ${num(UFFICIALI.length)} mazzi ufficiali
+        (Structure e Starter Deck)</button>
       <p class="nota">I mazzi restano dentro questo browser: se pulisci i dati spariscono.
         Copiali per tenerli al sicuro.</p>`;
   };

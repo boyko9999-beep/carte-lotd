@@ -55,6 +55,21 @@ Prima di creare mostra cosa ha capito: cosa non ha riconosciuto (con i
 suggerimenti da toccare), cosa ha interpretato, quali copie ha portato a 3, e
 **in quale epoca il mazzo diventa giocabile** — la più stretta in cui ci sta tutto.
 
+**I 71 mazzi ufficiali** — tutti gli *Structure Deck* e gli *Starter Deck* usciti
+fino al 2019, col loro nome italiano, raggruppati per saga. Dentro trovi cosa
+contengono, quante di quelle carte esistono in questo gioco e in quale epoca il
+mazzo si gioca; con un tocco diventa una tua ricetta, con la lista della spesa
+per andare a prendere le carte. L'archivio non dichiara quante copie ci siano
+nella scatola, quindi si parte con un esemplare per carta.
+
+**Un mazzo dal database di Konami** — nella schermata «Incolla» puoi mettere
+l'indirizzo di un mazzo su `db.yugioh-card.com`. L'app prova a leggere la pagina;
+quel sito però non permette a un'altra pagina di leggerlo (è una regola dei
+browser), quindi quando il tentativo fallisce l'app apre la pagina e ti dice di
+copiarla e incollarla: quel testo lo legge per intero — nome del mazzo, quantità
+riga per riga, Side Deck escluso — e confronta i totali che ha letto con quelli
+dichiarati dalla pagina.
+
 **Mazzi (ricette)** — un mazzo nasce dentro un'epoca. Aprendolo, tutta l'app si
 allinea a quell'epoca e puoi pescare solo dalle carte che esistevano allora.
 Main ed Extra Deck sono dedotti dal tipo di carta, il limite di 3 copie e le
@@ -139,8 +154,9 @@ node strumenti/prova8-ricerca.mjs  # ricerca per tema e riempimento della grigli
 node strumenti/prova9-revisione.mjs # i difetti trovati dalla revisione: plurali,
                                     # articoli, salti fra le sezioni, stato vuoto
 node strumenti/prova10-incolla.mjs  # lista incollata: lettura, nomi, epoca, creazione
+node strumenti/prova11-ufficiali.mjs # mazzi ufficiali e pagina del database di Konami
 ```
 
-297 controlli su un Chromium headless. La prova 5 misura anche i tempi: avvio
+331 controlli su un Chromium headless. La prova 5 misura anche i tempi: avvio
 sotto i 200 ms, ricerca su 10.026 carte sotto il mezzo secondo, e il pulsante
 «Mostra altre carte» che non rallenta man mano che la griglia cresce.
