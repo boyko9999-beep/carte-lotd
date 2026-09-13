@@ -22,3 +22,8 @@ for f in codice:
 html = out.getvalue()
 open(OUT, "w", encoding="utf-8").write(html)
 print(f"{os.path.normpath(OUT)}: {len(html.encode()):,} byte")
+
+# la radice del sito deve esistere, altrimenti GitHub Pages mostra il README
+radice = os.path.join(QUI, os.pardir, "index.html")
+if not os.path.exists(radice):
+    print("ATTENZIONE: manca index.html, la pagina GitHub non aprirà l'app")

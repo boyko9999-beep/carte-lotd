@@ -5,6 +5,8 @@ pensata per il telefono. Un solo file: `lotd-duellanti.html`. Si apre con doppio
 non ha bisogno di installare niente e i dati funzionano anche senza connessione
 (dalla rete arrivano solo le immagini delle carte e i ritratti dei duellanti).
 
+Online: **https://boyko9999-beep.github.io/carte-lotd/**
+
 ## Cosa fa
 
 **Buste** — cosa c'è dentro la busta di ogni duellante: 33 buste, 10.026 carte,
@@ -55,6 +57,18 @@ scritta apposta.
 
 Carte per saga di uscita: DM 2.020 · GX 1.134 · 5D's 1.667 · ZEXAL 1.533 ·
 ARC-V 1.946 · VRAINS 1.726 (cumulate: 2.020 · 3.154 · 4.821 · 6.354 · 8.300 · 10.026).
+
+## Il sito
+
+GitHub Pages pubblica il branch `main` così com'è. Due file servono solo a questo:
+
+- `index.html` — la radice del sito rimanda a `lotd-duellanti.html`. Senza, GitHub
+  mostrerebbe il README al posto dell'app. Funziona anche a JavaScript spento
+  (`meta refresh`) e non aggiunge una tappa alla cronologia del browser.
+- `.nojekyll` — spegne Jekyll, che altrimenti rigenererebbe la pagina dal README.
+
+L'app pubblicata è quella del branch `main`: finché una modifica non arriva lì, il
+sito continua a mostrare la versione precedente.
 
 ## Rigenerare l'indice
 
