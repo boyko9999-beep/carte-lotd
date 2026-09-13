@@ -96,6 +96,7 @@ function render() {
     `<div class="wrap">${v.testa || ""}
       <div id="corpo">${CORPO()}</div></div>`;
   aggiornaPiede();
+  osserva();
   /* si resta dove si era solo se la schermata è la stessa (cambio epoca,
      apertura del pannello); cambiando schermata si parte dall'alto */
   scrollTo(0, chiave === ultimaSchermata ? y : 0);
@@ -104,14 +105,22 @@ function render() {
 function ridisegnaCorpo() {
   const el = document.getElementById("corpo");
   if (el) el.innerHTML = CORPO();
+  aggiornaConta();
   aggiornaPiede();
+  osserva();
 }
-function vaiA(cambi) { Object.assign(STATO, cambi); STATO.limite = 100; render(); }
+/* il numero in cima è calcolato mentre si disegna il corpo: va riscritto qui,
+   altrimenti resta quello di prima mentre si scrive nella ricerca */
+function aggiornaConta() {
+  const el = document.querySelector(".conta");
+  if (el && (STATO.vista === "carte") && !STATO.schermata) el.textContent = testoConta();
+}
+function vaiA(cambi) { Object.assign(STATO, cambi); azzeraLimiti(); render(); }
 
 function impostaCursore(i) {
   STATO.cursore = Math.max(0, Math.min(ULTIMA, i));
   STATO.soloNuove = false;
-  STATO.limite = 100;
+  azzeraLimiti();
   /* con un mazzo aperto l'epoca È quella del mazzo: spostarla lo sposta.
      Le carte non si toccano mai: l'epoca è una lente, non una ghigliottina. */
   const m = mazzoAperto();

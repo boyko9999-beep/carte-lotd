@@ -12,6 +12,17 @@ Online: **https://boyko9999-beep.github.io/carte-lotd/**
 **Buste** — cosa c'è dentro la busta di ogni duellante: 33 buste, 10.026 carte,
 quante sono rare, e da quali epoche vengono (la barra colorata in testa alla busta).
 
+**Ricerca per tema, in italiano** — le carte hanno anche il loro nome italiano
+ufficiale, quindi si cerca come si parla: *drago bianco occhi blu*, *zombie*,
+*eroi elementari*. Le parole sono ridotte alla radice, così «eroi elementari»
+trova gli «EROE Elementale» e «zombie» trova tutta la razza Zombie, non solo chi
+ha Zombie nel nome.
+
+Sotto le carte trovate compare un secondo elenco, **«che ci vanno insieme»**:
+stesso archetipo, carte nominate nel testo di quelle trovate, e carte che le
+nominano. È così che cercando gli Eroi Elementali salta fuori anche
+*Polimerizzazione*, che nel loro testo è nominata diciassette volte.
+
 **Filtro per epoca** — una sola linea del tempo, sempre **cumulativa**:
 
 - tocchi *GX* e vedi le carte di GX **insieme a quelle di Duel Monsters**;
@@ -43,8 +54,9 @@ L'indice delle carte è **precompilato** e incorporato nell'HTML come
 `<script type="application/json">`: l'app parte subito, senza le centinaia di
 richieste di rete che servivano prima.
 
-Per ogni carta: nome, immagine, tipo di cornice, archetipo, rarità, busta,
-duelli che la regalano, e la **tacca** di disponibilità — l'indice sulla linea del
+Per ogni carta: nome inglese e italiano, immagine, tipo di cornice, razza,
+attributo, archetipo, rarità, busta, duelli che la regalano, le carte nominate
+nel suo testo, e la **tacca** di disponibilità — l'indice sulla linea del
 tempo a 25 tagli (i 21 anni dal 1999 al 2019 più i 5 confini di saga, che cadono
 ad aprile/maggio e quindi non coincidono con la fine dell'anno: *fine 2008* sono
 3.594 carte, *fine GX* ne sono 3.154).
@@ -84,7 +96,11 @@ python3 assembla.py    # ricostruisce ../lotd-duellanti.html da src/ + indice.js
 ```
 
 Sorgenti: il foglio pubblico *Card Master List* (quali carte sono nel gioco e dove
-si trovano) e `db.ygoprodeck.com` (data di uscita e tipo). `build.py` risolve il
+si trovano), `db.ygoprodeck.com` (data di uscita e tipo) e lo stesso archivio in
+italiano (`?language=it`, 9.894 carte su 10.026: le 132 mancanti non sono mai
+uscite in italiano e si cercano col nome inglese). Nei testi italiani i nomi di
+carta stanno fra virgolette, quindi i riferimenti fra carte si estraggono in modo
+esatto, non indovinato. `build.py` risolve il
 join per codice carta, corregge i nove refusi del foglio e si ferma con un errore
 se le buste non sono esattamente 33 o se una resta vuota — così un alias mancante
 non produce mai in silenzio una busta fantasma.
@@ -101,8 +117,9 @@ node strumenti/prova3.mjs   # costruttore di mazzi, lista della spesa, persisten
 node strumenti/prova4.mjs   # scroll, epoca dei mazzi, cancellazioni, carte fuori epoca
 node strumenti/prova5.mjs   # reattività: avvio, griglia che cresce, ricerca, limiti
 node strumenti/prova6.mjs   # nomi ostili: virgolette, barre, HTML nei nomi dei mazzi
+node strumenti/prova8-ricerca.mjs  # ricerca per tema e riempimento della griglia
 ```
 
-165 controlli su un Chromium headless. La prova 5 misura anche i tempi: avvio
+196 controlli su un Chromium headless. La prova 5 misura anche i tempi: avvio
 sotto i 200 ms, ricerca su 10.026 carte sotto il mezzo secondo, e il pulsante
 «Mostra altre carte» che non rallenta man mano che la griglia cresce.

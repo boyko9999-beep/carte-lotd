@@ -18,7 +18,9 @@ FOGLIO = "19tRadwIu9HH8nKa81Vk4XJSmZdwCy5k2pyACB6ma0yo"
 CSV_URL = (f"https://docs.google.com/spreadsheets/d/{FOGLIO}"
            "/gviz/tq?tqx=out:csv&sheet=Card%20Master%20List")
 API_URL = "https://db.ygoprodeck.com/api/v7/cardinfo.php?misc=yes"
-CSV_FILE, API_FILE, OUT = "sheet.csv", "full.json", "indice.json"
+# Stesso archivio in italiano: nomi e testi ufficiali delle carte.
+API_IT_URL = "https://db.ygoprodeck.com/api/v7/cardinfo.php?language=it"
+CSV_FILE, API_FILE, API_IT_FILE, OUT = "sheet.csv", "full.json", "full-it.json", "indice.json"
 
 def scarica(url, dest):
     if os.path.exists(dest) and os.path.getsize(dest) > 100000: return
@@ -95,9 +97,10 @@ PAVIMENTO = {
 }
 
 # ---------------------------------------------------------------- sorgenti
-scarica(CSV_URL, CSV_FILE); scarica(API_URL, API_FILE)
+scarica(CSV_URL, CSV_FILE); scarica(API_URL, API_FILE); scarica(API_IT_URL, API_IT_FILE)
 righe = list(csv.DictReader(open(CSV_FILE, encoding="utf-8")))
 db = json.load(open(API_FILE))["data"]
+db_it = json.load(open(API_IT_FILE))["data"]
 
 per_id, per_nome = {}, {}
 for c in db:
@@ -105,6 +108,12 @@ for c in db:
     per_id.setdefault(str(c["id"]), c)
     for im in c.get("card_images", []): per_id.setdefault(str(im["id"]), c)
 chiavi_nome = list(per_nome)
+
+# l'italiano si aggancia per codice carta: i nomi non coincidono di sicuro
+it_per_id = {}
+for c in db_it:
+    it_per_id.setdefault(str(c["id"]), c)
+    for im in c.get("card_images", []): it_per_id.setdefault(str(im["id"]), c)
 
 # ---------------------------------------------------------------- luoghi
 # Buste e duelli nella stessa tabella: e' questa uniformita' che rende
@@ -128,12 +137,14 @@ def saga_campagna(s):
 # ---------------------------------------------------------------- carte
 frames, i_frame = [], {}
 archi,  i_arch  = [], {}
+razze,  i_razza = [], {}
+attri,  i_attr  = [], {}
 def interna(lst, idx, v):
     if not v: return -1
     if v not in idx: idx[v] = len(lst); lst.append(v)
     return idx[v]
 
-CARTE, note = [], collections.Counter()
+CARTE, note, testi_it = [], collections.Counter(), []
 gia_viste = {}          # nome -> indice in CARTE
 for r in righe:
     dove = r["Link Evolution Location"].strip()
@@ -182,6 +193,8 @@ for r in righe:
         else:
             note["fonte non riconosciuta: " + pezzo] += 1
 
+    it = it_per_id.get(str(c["id"])) or it_per_id.get(cid)
+    if not it: note["senza nome italiano"] += 1
     m = c.get("misc_info", [{}])[0]
     date = sorted(d for d in (m.get("ocg_date"), m.get("tcg_date")) if d and not d.startswith("0000"))
     cornice = c.get("frameType", "")
@@ -196,11 +209,34 @@ for r in righe:
         int(date[0][:4]) if date else 0,
         rara, bu, sorted(set(fonti)),
         interna(archi, i_arch, c.get("archetype", "")),
+        (it.get("name") or "") if it else "",
+        interna(razze, i_razza, (it or c).get("race", "")),
+        interna(attri, i_attr, (it or c).get("attribute", "")),
+        [],                       # carte citate nel testo: si riempie più sotto
     ])
+    testi_it.append((it or {}).get("desc", ""))
 
 conta_fonte = collections.Counter(i for c in CARTE for i in c[7])
 for i, l in enumerate(LUOGHI):
     if l["tipo"] != "busta": l["taglia"] = conta_fonte[i]
+
+# ---------------------------------------------------------------- carte citate
+# Nei testi italiani i nomi di carta stanno fra virgolette doppie: l'estrazione
+# è esatta, non indovinata. Serve a rispondere "cosa mi serve per questo mazzo":
+# gli Eroi Elementali nominano Polimerizzazione, e così la si trova cercandoli.
+NOME_IT = {}
+for i, c in enumerate(CARTE):
+    if c[9]: NOME_IT.setdefault(c[9].lower(), i)
+citazioni = 0
+for i, testo in enumerate(testi_it):
+    if not testo: continue
+    visti = []
+    for citato in re.findall(r'"([^"\n]{3,80})"', testo):
+        j = NOME_IT.get(citato.strip().lower())
+        if j is not None and j != i and j not in visti: visti.append(j)
+    CARTE[i][12] = visti
+    citazioni += len(visti)
+print("citazioni fra carte:", citazioni)
 
 # ---------------------------------------------------------------- ritratti
 # I ritratti dei 33 duellanti da yugipedia: si scaricano una volta e si
@@ -254,12 +290,13 @@ for i, v in attesi.items():
     assert cum[i] == v, f"cumulata tacca {i}: attesa {v}, calcolata {cum[i]}"
 
 print("carte:", len(CARTE), "· luoghi:", len(LUOGHI), "· tacche:", len(TACCHE))
+print("con nome italiano:", sum(1 for c in CARTE if c[9]), "· razze:", len(razze), "· attributi:", len(attri))
 print("note:", {k: v for k, v in note.items()})
 print("cumulate fine saga:", {SAGHE[i]["nome"]: cum[SAGHE[i]["ultima"]] for i in range(6)})
 
 payload = {"tacche": TACCHE, "saghe": SAGHE, "luoghi": LUOGHI,
-           "frames": frames, "archetipi": archi, "carte": CARTE,
-           "ritratti": RITRATTI}
+           "frames": frames, "archetipi": archi, "razze": razze, "attributi": attri,
+           "carte": CARTE, "ritratti": RITRATTI}
 raw = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
 open(OUT, "w", encoding="utf-8").write(raw)
 print(f"{OUT}: {len(raw.encode()):,} byte  ·  gzip {len(gzip.compress(raw.encode())):,} byte")

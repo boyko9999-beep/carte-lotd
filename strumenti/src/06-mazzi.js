@@ -139,6 +139,7 @@ function rigaMazzo(nome) {
       ${c[ID] ? `<img src="${img(c[ID])}" alt="" loading="lazy">` : `<div class="vuota"></div>`}</button>
     <span style="min-width:0;flex:1">
       <button class="tocca-ris" data-c="${k}"><span class="nome">${esc(c[N])}</span></button>
+      ${c[NI] && c[NI] !== c[N] ? `<small class="it">${esc(c[NI])}</small>` : ""}
       <small>${esc(CORNICE[cornice(c)] ? CORNICE[cornice(c)][0] : "")} · ${c[A] || "?"}${
         fuori ? " · fuori dalla tua epoca" : ""}</small></span>
     ${controlloCopie(k, "largo")}</div>`;
@@ -148,25 +149,32 @@ function rigaMazzo(nome) {
 function vistaSelettore() {
   const m = mazzoAperto();
   const corpo = () => {
-    const base = cerca(TUTTE, STATO.qSel);
-    const ch = filtraCornici(base);
-    const dentroCh = ch.filter(k => dentroA(k, m.cursore));
-    const fuoriCh = STATO.mostraFuori ? ch.filter(k => !dentroA(k, m.cursore)) : [];
-    const vuoto = !dentroCh.length
-      ? `<p class="vuoto">Nessuna carta ${esc(etichettaCursore(m.cursore))}${
-          STATO.tipiAttivi.size ? " di questo tipo" : ""}.
-        ${STATO.mostraFuori ? "" : `<br><button class="azione second" data-az="fuori">Mostra anche le carte fuori epoca</button>`}</p>`
-      : "";
-    return chipCornici(base) + `
-      <button class="f blocco" data-az="fuori" aria-pressed="${STATO.mostraFuori}">Mostra anche le carte fuori dalla tua epoca</button>
-      <p class="serie">${num(dentroCh.length)} carte nella tua epoca</p>
-      ${vuoto || grigliaCarte(dentroCh)}
-      ${fuoriCh.length ? `<p class="serie">Fuori dalla tua epoca · ${num(fuoriCh.length)}</p>
-        ${grigliaCarte(fuoriCh, "", "fuori")}` : ""}`;
+    const testo = STATO.qSel.trim();
+    MOSTRA_IT = !!testo;
+    const base = cerca(TUTTE, testo);
+    const nellEpoca = k => dentroA(k, m.cursore);
+    const fuoriCh = STATO.mostraFuori ? filtraCornici(base).filter(k => !nellEpoca(k)) : [];
+    const testa = `<button class="f blocco" data-az="fuori" aria-pressed="${STATO.mostraFuori}"
+      >Mostra anche le carte fuori dalla tua epoca</button>`;
+
+    let dentro;
+    if (testo) {
+      const r = sezioniRicerca(base, testo, nellEpoca, "s");
+      dentro = testa + r.html;
+    } else {
+      const ch = filtraCornici(base).filter(nellEpoca);
+      dentro = chipCornici(base) + testa
+        + `<p class="serie">${num(ch.length)} carte nella tua epoca</p>`
+        + grigliaCarte(ch, `<p class="vuoto">Nessuna carta ${esc(etichettaCursore(m.cursore))}.</p>`, "sgriglia");
+    }
+    return dentro + (fuoriCh.length
+      ? `<p class="serie">Fuori dalla tua epoca · ${num(fuoriCh.length)}</p>`
+        + grigliaCarte(fuoriCh, "", "sfuori")
+      : "");
   };
   return {
     titolo: "Aggiungi carte", indietro: true,
-    testa: campoRicerca("Cerca una carta o un archetipo", STATO.qSel, "qSel"),
+    testa: campoRicerca("Cerca: drago bianco, zombie, eroi elementari…", STATO.qSel, "qSel"),
     corpo
   };
 }

@@ -24,9 +24,13 @@ const ARCHETIPI = INDICE.archetipi;
 const RITRATTI = INDICE.ritratti;
 const ULTIMA = TACCHE.length - 1;
 
-/* carte: [nome, idImmagine, cornice, tacca, anno, rara, busta, fonti[], archetipo] */
-const N = 0, ID = 1, F = 2, T = 3, A = 4, R = 5, BU = 6, FO = 7, AR = 8;
+/* carte: [nome, idImmagine, cornice, tacca, anno, rara, busta, fonti[], archetipo,
+           nomeItaliano, razza, attributo, carteCitate[]] */
+const N = 0, ID = 1, F = 2, T = 3, A = 4, R = 5, BU = 6, FO = 7, AR = 8,
+      NI = 9, RA = 10, AT = 11, CITA = 12;
 const CARTE = INDICE.carte;
+const RAZZE = INDICE.razze;
+const ATTRIBUTI = INDICE.attributi;
 
 const SERIE = [
   ["Duel Monsters", ["Grandpa Muto", "Mai Valentine", "Bakura", "Joey Wheeler", "Seto Kaiba", "Yugi"]],
@@ -53,6 +57,29 @@ const CORNICI_EXTRA = new Set(["fusion", "synchro", "xyz", "link",
   "fusion_pendulum", "synchro_pendulum", "xyz_pendulum"]);
 const MOSTRI = new Set(["normal", "effect", "ritual", "fusion", "synchro", "xyz", "link",
   "normal_pendulum", "effect_pendulum", "fusion_pendulum", "synchro_pendulum", "xyz_pendulum"]);
+
+/* Razze e attributi arrivano in inglese dall'archivio: qui le parole con cui
+   un giocatore italiano li cerca davvero. Sono insiemi chiusi, scritti a mano. */
+const RAZZA_IT = {
+  Aqua: "Acqua", Beast: "Bestia", "Beast-Warrior": "Bestia Guerriero",
+  "Creator God": "Dio Creatore", Cyberse: "Cyberso", Dinosaur: "Dinosauro",
+  "Divine-Beast": "Bestia Divina", Dragon: "Drago", Fairy: "Fata", Fiend: "Demone",
+  Fish: "Pesce", Illusion: "Illusione", Insect: "Insetto", Machine: "Macchina",
+  Plant: "Pianta", Psychic: "Psichico", Pyro: "Piro", Reptile: "Rettile",
+  Rock: "Roccia", "Sea Serpent": "Serpente Marino", Spellcaster: "Incantatore Mago",
+  Thunder: "Tuono", Warrior: "Guerriero", "Winged Beast": "Bestia Alata", Wyrm: "Wyrm",
+  Zombie: "Zombie",
+  /* per Magie e Trappole la "razza" è il sottotipo */
+  Normal: "Normale", Continuous: "Continua", Equip: "Equipaggiamento",
+  "Quick-Play": "Rapida", Field: "Terreno", Counter: "Contro", Ritual: "Rituale"
+};
+const ATTRIBUTO_IT = { EARTH: "Terra", WATER: "Acqua", WIND: "Vento", FIRE: "Fuoco",
+  LIGHT: "Luce", DARK: "Oscurità", DIVINE: "Divino" };
+const razzaDi = c => c[RA] >= 0 ? RAZZE[c[RA]] : "";
+const attributoDi = c => c[AT] >= 0 ? ATTRIBUTI[c[AT]] : "";
+const razzaIt = c => RAZZA_IT[razzaDi(c)] || razzaDi(c);
+const attributoIt = c => ATTRIBUTO_IT[attributoDi(c)] || attributoDi(c);
+const nomeIt = c => c[NI] || c[N];
 
 /* ================= indici costruiti all'avvio ================= */
 const PER_NOME = new Map();
@@ -81,6 +108,21 @@ for (let i = 1; i < TACCHE.length; i++)
 for (const l of PER_LUOGO) l.sort((a, b) => CARTE[a][N].localeCompare(CARTE[b][N]));
 
 /* solo le tacche "fine anno": sono quelle su cui cammina lo stepper */
+/* chi appartiene a un archetipo, e chi cita chi: servono a passare dalle carte
+   trovate a quelle "che servono per quel mazzo" */
+const PER_ARCHETIPO = new Map();
+const CITATO_DA = new Map();
+CARTE.forEach((c, k) => {
+  if (c[AR] >= 0) {
+    if (!PER_ARCHETIPO.has(c[AR])) PER_ARCHETIPO.set(c[AR], []);
+    PER_ARCHETIPO.get(c[AR]).push(k);
+  }
+  for (const j of c[CITA]) {
+    if (!CITATO_DA.has(j)) CITATO_DA.set(j, []);
+    CITATO_DA.get(j).push(k);
+  }
+});
+
 const ANNI = TACCHE.map((t, i) => ({ anno: t.a, i })).filter(x => TACCHE[x.i].d.endsWith("-01-01"));
 const BUSTA_DI = new Map();          // nome duellante -> indice luogo
 LUOGHI.forEach((l, i) => { if (l.tipo === "busta") BUSTA_DI.set(l.chi, i); });
@@ -105,8 +147,6 @@ const STATO = {
   cursorePrima: null,
   q: "", qDove: "", qCarte: "", qSel: "",
   tipiAttivi: new Set(),
-  limite: 100,
-  limiteFuori: 60,
   nascondiFuori: false,
   ordine: "nome",
   gruppo: null,

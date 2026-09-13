@@ -131,12 +131,12 @@ await T('le carte fuori epoca sono tutte raggiungibili', async () => {
   const t = await txt('#corpo');
   const m = t.match(/Fuori dalla tua epoca · ([\d.]+)/);
   ok('la sezione dichiara il totale', !!m, (t.match(/Fuori[^\n]{0,40}/) || [''])[0]);
-  const bottone = await page.$('[data-altre="fuori"]');
-  ok('c\'è il pulsante per vedere le altre', !!bottone);
-  if (bottone) {
+  const coda = await page.$('[data-altre="sfuori"]');
+  ok('la coda carica da sola le altre fuori epoca', !!coda);
+  if (coda) {
     const n1 = (await page.$$('.carta')).length;
-    await bottone.click(); await page.waitForTimeout(300);
-    ok('mostra altre carte fuori epoca', (await page.$$('.carta')).length > n1,
+    await coda.click(); await page.waitForTimeout(400);
+    ok('ne compaiono altre', (await page.$$('.carta')).length > n1,
        `${n1} -> ${(await page.$$('.carta')).length}`);
   }
 });

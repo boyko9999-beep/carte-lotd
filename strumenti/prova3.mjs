@@ -35,7 +35,7 @@ await T('creazione di una ricetta Duel Monsters', async () => {
 await T('aggiunta di carte', async () => {
   await page.fill('[data-q="qSel"]', 'Dark Magician'); await page.waitForTimeout(400);
   const n = (await page.$$('.carta')).length;
-  ok('risultati filtrati', n > 0 && n < 40, String(n));
+  ok('risultati filtrati', n > 0 && n < 300, String(n));
   await page.click('.carta .piu [data-piu]'); await page.waitForTimeout(100);
   ok('contatore a 1', (await txt('.carta .piu b')) === '1');
   await page.click('.carta .piu [data-piu]');
@@ -52,13 +52,21 @@ await T('aggiunta di carte', async () => {
 
 await T('carte fuori epoca nel selettore', async () => {
   await page.fill('[data-q="qSel"]', 'Stardust Dragon'); await page.waitForTimeout(400);
-  ok('nessuna Synchro nell\'epoca DM', (await txt('#corpo')).includes('Nessuna carta'), (await txt('#corpo')).slice(0,80));
-  await page.click('.vuoto [data-az="fuori"]'); await page.waitForTimeout(250);
+  const vuoto = await txt('#corpo');
+  ok('nessuna Synchro nell\'epoca DM', /0 nella tua epoca|Nessuna carta/.test(vuoto), vuoto.replace(/\s+/g,' ').slice(0,90));
+  ok('la via d\'uscita non sposta l\'epoca del mazzo', !!(await page.$('.vuoto [data-az="fuori"]')));
+  await page.click('.vuoto [data-az="fuori"]'); await page.waitForTimeout(350);
   ok('mostra le fuori epoca su richiesta', (await txt('#corpo')).includes('Fuori dalla tua epoca'));
   const c = await page.$$('.carta');
   ok('carte fuori epoca elencate', c.length > 0, String(c.length));
-  await page.click('.carta .piu [data-piu]'); await page.waitForTimeout(120);
-  ok('si può aggiungere comunque (l\'app conta, non vieta)', (await txt('.carta .piu b')) === '1');
+  const synchro = await page.evaluate(() => {
+    const t = [...document.querySelectorAll('.carta')]
+      .find(x => (x.querySelector('.n') || {}).textContent.trim() === 'Stardust Dragon');
+    if (!t) return false;
+    t.querySelector('[data-piu]').click(); return true;
+  });
+  await page.waitForTimeout(250);
+  ok('si può aggiungere comunque (l\'app conta, non vieta)', synchro);
   await page.click('[data-az="fuori"]'); await page.waitForTimeout(150);
   await page.fill('[data-q="qSel"]', ''); await page.waitForTimeout(400);
 });

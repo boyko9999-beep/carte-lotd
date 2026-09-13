@@ -22,7 +22,9 @@ function cartaHTML(k) {
               : `<div class="vuota">${esc(c[N])}</div>`}
       ${c[R] ? `<i class="rara" title="rara"></i>` : ""}
       <span class="n" style="border-left-color:${col}">${esc(c[N])}</span></button>
+    ${MOSTRA_IT && c[NI] && c[NI] !== c[N] ? `<span class="nomeit">${esc(c[NI])}</span>` : ""}
     <span class="anno${nuova ? " nuovo" : ""}">${c[A] || "?"}</span>
+
     ${m ? controlloCopie(k, "tile") : ""}</div>`;
 }
 
@@ -45,10 +47,114 @@ function aggiornaControllo(k) {
   aggiornaPiede();
 }
 
-/* L'elenco disegnato resta a portata di mano: "Mostra altre carte" accoda le
-   nuove piastrelle invece di ricostruire da capo quelle già a schermo, che a
-   ogni tocco costerebbero sempre di più. */
-const CHIAVI = {};
+/* =====================================================================
+   Ricerca per tema
+
+   I nomi delle carte nel gioco sono in inglese, ma l'archivio porta anche i
+   nomi ufficiali italiani: "Drago Bianco Occhi Blu" è il nome vero. Si cerca
+   quindi in italiano, riducendo le parole alla radice, così che "eroi
+   elementari" trovi gli "EROE Elementale" e "zombie" trovi la razza Zombie.
+
+   Poi si allarga alle carte che ci vanno insieme: stesso archetipo, carte
+   citate nel testo e carte che citano quelle trovate. È così che cercando gli
+   Eroi Elementali salta fuori anche Polimerizzazione, che nel loro testo è
+   nominata diciassette volte.
+   ===================================================================== */
+const senzaAccenti = s => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+const spezza = s => senzaAccenti(String(s)).toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+
+/* suffissi italiani, dal più lungo al più corto */
+const SUFFISSI = ["issimi", "issime", "issimo", "issima", "mente", "zioni", "zione",
+  "ando", "endo", "anti", "ante", "arie", "ario", "ari", "ale", "ali", "are",
+  "ato", "ata", "ati", "ate", "ore", "ori", "ice", "ici", "oso", "osa", "osi", "ose"];
+function radice(p) {
+  for (const s of SUFFISSI)
+    if (p.length - s.length >= 4 && p.endsWith(s)) return p.slice(0, p.length - s.length);
+  /* poi la vocale finale: lega "eroi" a "eroe", "nera" a "nero" */
+  if (p.length >= 4 && "aeio".includes(p[p.length - 1])) return p.slice(0, -1);
+  return p;
+}
+const radici = testo => spezza(testo).map(radice);
+
+/* Due impronte per carta: una col solo nome (decide l'ordine) e una completa.
+   Si costruiscono alla prima ricerca, non all'avvio: aprire l'app resta immediato. */
+let IMPRONTA = null, IMPRONTA_NOME = null;
+function costruisciImpronte() {
+  if (IMPRONTA) return;
+  IMPRONTA = new Array(CARTE.length);
+  IMPRONTA_NOME = new Array(CARTE.length);
+  for (let k = 0; k < CARTE.length; k++) {
+    const c = CARTE[k];
+    const nome = spezza(c[N]).concat(c[NI] ? spezza(c[NI]) : []);
+    const altro = nome.slice();
+    if (c[AR] >= 0) altro.push(...spezza(ARCHETIPI[c[AR]]));
+    if (c[RA] >= 0) altro.push(...spezza(razzaDi(c)), ...spezza(razzaIt(c)));
+    if (c[AT] >= 0) altro.push(...spezza(attributoDi(c)), ...spezza(attributoIt(c)));
+    const cor = CORNICE[cornice(c)];
+    if (cor) altro.push(...spezza(cor[0]));
+    IMPRONTA_NOME[k] = " " + [...new Set(nome.map(radice))].join(" ") + " ";
+    IMPRONTA[k] = " " + [...new Set(altro.map(radice))].join(" ") + " ";
+  }
+}
+/* tutte le radici cercate devono comparire come inizio di una parola */
+const corrisponde = (impronta, rad) => rad.every(r => impronta.includes(" " + r));
+
+function cerca(chiavi, testo) {
+  const rad = radici(testo);
+  if (!rad.length) return chiavi;
+  costruisciImpronte();
+  const perNome = [], perAltro = [];
+  for (const k of chiavi) {
+    if (!corrisponde(IMPRONTA[k], rad)) continue;
+    (corrisponde(IMPRONTA_NOME[k], rad) ? perNome : perAltro).push(k);
+  }
+  return perNome.concat(perAltro);
+}
+
+/* Il nome inglese resta quello grande: nel gioco le carte si chiamano così e
+   serve a ritrovarle. Quello italiano compare sotto mentre si cerca, perché è
+   con quello che si è cercato. */
+let MOSTRA_IT = false;
+
+/* Le carte che vanno insieme a quelle trovate, in tre gruppi distinti.
+   Una carta sta in un gruppo solo, quello più stretto: appartenere allo stesso
+   archetipo dice più che essere nominata di sfuggita. La deduplica avviene
+   contro TUTTE le trovate, anche quelle che epoca e chip nascondono, altrimenti
+   togliendo un filtro una carta salterebbe da una sezione all'altra. */
+const TETTI = { archetipo: 150, servono: 100, usano: 50 };
+function espandi(trovate) {
+  if (!trovate.length) return { archetipo: [], servono: [], usano: [] };
+  const gia = new Set(trovate);
+  const arch = new Set(), servono = new Map(), usano = new Map();
+  for (const k of trovate) {
+    const c = CARTE[k];
+    if (c[AR] >= 0) for (const j of (PER_ARCHETIPO.get(c[AR]) || [])) if (!gia.has(j)) arch.add(j);
+    for (const j of c[CITA]) if (!gia.has(j)) servono.set(j, (servono.get(j) || 0) + 1);
+    for (const j of (CITATO_DA.get(k) || [])) if (!gia.has(j)) usano.set(j, (usano.get(j) || 0) + 1);
+  }
+  /* il gruppo più stretto vince: chi è già nell'archetipo non ricompare sotto */
+  for (const j of arch) { servono.delete(j); usano.delete(j); }
+  for (const j of servono.keys()) usano.delete(j);
+  const perNome = (a, b) => nomeIt(CARTE[a]).localeCompare(nomeIt(CARTE[b]));
+  /* le più nominate per prime: è così che Polimerizzazione emerge fra gli Eroi */
+  const perQuante = m => [...m.entries()]
+    .sort((a, b) => b[1] - a[1] || perNome(a[0], b[0])).map(x => x[0]);
+  return { archetipo: [...arch].sort(perNome), servono: perQuante(servono), usano: perQuante(usano) };
+}
+
+/* Quante piastrelle si disegnano.
+   Una regola sola, uguale ovunque: 300 subito, poi 300 per volta man mano che
+   si scorre. Nessun pulsante da premere, mai. 300 piastrelle costano ~18 ms su
+   questo banco (quindi ~60 ms su un telefono di fascia media); 1.200 ne
+   costerebbero ~220, e il prezzo si paga a OGNI tasto digitato, perché il corpo
+   si ridisegna tutto. Un blocco da 300 è alto circa ventisei schermate e la
+   sentinella lo accoda con 1.200 px di anticipo: le carte ci sono già prima che
+   il fondo si veda. */
+const PRIMO = 300, BLOCCO = 300;
+const CHIAVI = {}, LIMITI = {};
+const azzeraLimiti = () => { for (const k in LIMITI) delete LIMITI[k]; };
+const limiteDi = (id, n) => Math.min(LIMITI[id] > 0 ? LIMITI[id] : PRIMO, n);
+
 /* Raggiunto un limite cambia solo la disponibilità dei "+": si aggiornano i
    nodi già a schermo, senza ricostruire una griglia da mille piastrelle. */
 function aggiornaDisponibilita() {
@@ -60,50 +166,59 @@ function aggiornaDisponibilita() {
     if (no) b.title = no; else b.removeAttribute("title");
   }
 }
+/* Cosa rende diverso un elenco da un altro. Confrontare lunghezza e prima
+   chiave non basta: un riordino non si vedrebbe e resterebbero a schermo
+   piastrelle in ordine nuovo e numero arbitrario. */
+const FIRME = {};
+const firma = id => [id, STATO.schermata, STATO.vista, STATO.luogo, STATO.mazzo,
+  STATO.q, STATO.qCarte, STATO.qSel, STATO.cursore, STATO.soloNuove, STATO.ordine,
+  STATO.nascondiFuori, STATO.mostraFuori, [...STATO.tipiAttivi].sort().join(",")].join("|");
+
 function grigliaCarte(chiavi, vuoto, id) {
   id = id || "griglia";
+  const f = firma(id);
+  if (FIRME[id] !== f) { FIRME[id] = f; LIMITI[id] = 0; }
   CHIAVI[id] = chiavi;
-  const limite = id === "fuori" ? STATO.limiteFuori : STATO.limite;
   if (!chiavi.length) return vuoto || `<p class="vuoto">Nessuna carta.</p>`;
+  const limite = limiteDi(id, chiavi.length);
   return `<div class="carte" id="${id}">${chiavi.slice(0, limite).map(cartaHTML).join("")}</div>
-    ${bottoneAltre(id)}`;
+    ${coda(id)}`;
 }
-function bottoneAltre(id) {
+function coda(id) {
   const chiavi = CHIAVI[id] || [];
-  const limite = id === "fuori" ? STATO.limiteFuori : STATO.limite;
+  const limite = limiteDi(id, chiavi.length);
   if (chiavi.length <= limite) return "";
-  return `<button class="azione second" data-altre="${id}">Mostra altre carte
-    (${num(chiavi.length - limite)} rimaste)</button>`;
+  return `<div class="sentinella" data-altre="${id}">
+    <span>altre ${num(chiavi.length - limite)} carte…</span></div>`;
 }
+/* accoda senza ricostruire quelle già a schermo */
+let accodaInCorso = false;
 function accodaCarte(id) {
   const griglia = document.getElementById(id), chiavi = CHIAVI[id] || [];
-  if (!griglia) return false;
-  const prima = id === "fuori" ? STATO.limiteFuori : STATO.limite;
-  const passo = id === "fuori" ? 60 : 100;
-  const dopo = Math.min(chiavi.length, prima + passo);
-  if (id === "fuori") STATO.limiteFuori = dopo; else STATO.limite = dopo;
+  if (!griglia || accodaInCorso) return !!griglia;
+  accodaInCorso = true;
+  requestAnimationFrame(() => { accodaInCorso = false; });
+  const prima = limiteDi(id, chiavi.length);
+  if (prima >= chiavi.length) return true;
+  const dopo = Math.min(chiavi.length, prima + BLOCCO);
+  LIMITI[id] = dopo;
   griglia.insertAdjacentHTML("beforeend", chiavi.slice(prima, dopo).map(cartaHTML).join(""));
-  const b = document.querySelector(`[data-altre="${id}"]`);
-  if (b) b.outerHTML = bottoneAltre(id);
+  const s = document.querySelector(`.sentinella[data-altre="${id}"]`);
+  if (s) { s.outerHTML = coda(id); osserva(); }
   return true;
 }
-
-/* Carte che corrispondono al testo cercato: nome o archetipo.
-   Cercando "Dark Magician" escono anche le carte dell'archetipo, ma prima
-   vengono quelle che hanno quel nome: chi cerca un nome esatto lo trova in cima. */
-function cerca(chiavi, testo) {
-  const f = testo.trim().toLowerCase();
-  if (!f) return chiavi;
-  const trovate = [];
-  for (const k of chiavi) {
-    const c = CARTE[k], nome = c[N].toLowerCase();
-    const i = nome.indexOf(f);
-    if (i === 0) trovate.push([0, k]);
-    else if (i > 0) trovate.push([1, k]);
-    else if (c[AR] >= 0 && ARCHETIPI[c[AR]].toLowerCase().includes(f)) trovate.push([2, k]);
-  }
-  return trovate.sort((a, b) => a[0] - b[0]).map(x => x[1]);
+/* Le carte compaiono da sole arrivando in fondo. Se il browser non sa farlo,
+   la sentinella resta toccabile e funziona come un pulsante. */
+let OSSERVATORE = null;
+function osserva() {
+  if (typeof IntersectionObserver !== "function") return;
+  if (!OSSERVATORE) OSSERVATORE = new IntersectionObserver(voci => {
+    for (const v of voci) if (v.isIntersecting) accodaCarte(v.target.dataset.altre);
+  }, { rootMargin: "1200px" });
+  OSSERVATORE.disconnect();
+  document.querySelectorAll(".sentinella").forEach(s => OSSERVATORE.observe(s));
 }
+
 const ordinaCarte = (chiavi) => STATO.ordine === "epoca"
   ? chiavi.slice().sort((a, b) => CARTE[a][T] - CARTE[b][T] || CARTE[a][N].localeCompare(CARTE[b][N]))
   : chiavi;
@@ -166,6 +281,7 @@ function vistaLuogo() {
   const dispo = copertura(l);
 
   const corpo = () => {
+    MOSTRA_IT = !!STATO.q.trim();
     let ch = cerca(tutte, STATO.q);
     ch = filtraCornici(ch);
     if (STATO.nascondiFuori) ch = ch.filter(dentro);
@@ -209,27 +325,94 @@ const etichettaFino = () => STATO.cursore >= ULTIMA ? "" : "fino a " + descriviT
 /* =====================================================================
    Vista CARTE — tutte le carte sotto l'epoca attiva
    ===================================================================== */
+/* Le due sezioni dei risultati: prima quelle cercate, poi quelle che ci vanno
+   insieme. Ogni griglia ha il suo id e quindi il suo riempimento: nessuna
+   quantità di carte trovate può spingere le altre fuori dalla parte disegnata,
+   che era il difetto per cui cercando un archetipo le carte non comparivano. */
+const SALTO_DA = 30;
+function sezioniRicerca(base, testo, dentroFn, idPre) {
+  const q = esc(testo.trim());
+  const ch = filtraCornici(base);
+  const trovate = ch.filter(dentroFn);
+  const fuori = ch.length - trovate.length;
+  const g = espandi(base);
+  const gruppi = [
+    ["archetipo", "Stesso archetipo", "portano il nome dell'archetipo", g.archetipo],
+    ["servono", "Servono per queste carte", "sono nominate nel testo di quelle qui sopra", g.servono],
+    ["usano", "Usano queste carte", "le nominano nel loro testo", g.usano]
+  ].map(([k, et, spiega, tutte]) => {
+    const filtrate = filtraCornici(tutte).filter(dentroFn);
+    /* si dice sempre quante se ne disegnano e quante ce ne sarebbero */
+    return { k, et, spiega, disponibili: filtrate.length, carte: filtrate.slice(0, TETTI[k]) };
+  }).filter(x => x.carte.length);
+  const insieme = gruppi.reduce((a, x) => a + x.carte.length, 0);
+
+  if (!trovate.length && !insieme) {
+    /* dentro un mazzo l'epoca è sua e non si sposta per sbaglio: lì si accendono
+       le carte fuori epoca, non si allarga il mazzo */
+    const uscita = mazzoAperto()
+      ? `<button class="azione second" data-az="fuori">Mostra anche le carte fuori dalla tua epoca</button>`
+      : `<button class="azione second" data-az="tutto">Guardale comunque</button>`;
+    return { conta: 0, html: chipCornici(base) + (fuori
+      ? `<p class="vuoto">0 nella tua epoca · ${num(fuori)} fuori<br>${uscita}</p>`
+      : `<p class="vuoto">Nessuna carta per «${q}».<br>
+          Prova con il nome italiano, un tipo o un archetipo:
+          drago bianco, zombie, eroi elementari, macchina.</p>`) };
+  }
+
+  const salta = trovate.length >= SALTO_DA && insieme > 0;
+  let html = chipCornici(base);
+  if (trovate.length) {
+    html += `<p class="serie riga-serie"><span>Carte «${q}» · ${num(trovate.length)}</span>
+      ${salta ? `<a class="chip" href="#insieme">↓ altre ${num(insieme)} che ci vanno insieme</a>` : ""}</p>`
+      + grigliaCarte(ordinaCarte(trovate), "", idPre + "trovate");
+  }
+  if (insieme) {
+    html += `<div class="gruppo" id="insieme"><h3>Altre ${num(insieme)} che ci vanno insieme</h3></div>
+      <p class="spiega">Non si chiamano così, ma si giocano con quelle qui sopra${
+        gruppi.length === 1 ? ": " + esc(gruppi[0].spiega) : ""}.</p>
+      ${salta ? `<p class="serie"><a class="chip" href="#su">↑ Torna alle ${num(trovate.length)} «${q}»</a></p>` : ""}`;
+    for (const x of gruppi) {
+      if (gruppi.length > 1) html += `<p class="serie">${esc(x.et)} · ${num(x.carte.length)}</p>`;
+      if (x.carte.length < x.disponibili)
+        html += `<p class="spiega">Le più usate: ${num(x.carte.length)} di ${num(x.disponibili)}.</p>`;
+      html += grigliaCarte(x.carte, "", idPre + x.k);
+    }
+  }
+  return { conta: trovate.length + insieme, html };
+}
+
 function vistaCarte() {
   const corpo = () => {
-    const base = cerca(TUTTE, STATO.qCarte);
-    const ch = filtraCornici(base);
-    const dentroCh = ch.filter(dentro);
-    const fuori = ch.length - dentroCh.length;
-    const s = sagaDelCursore();
-    const riepilogo = `<p class="serie">${num(dentroCh.length)} carte${epocaAttiva() && !STATO.soloNuove
-      ? ` · ${num(dentroCh.filter(nuovaQui).length)} nuove con ${esc(SAGHE[s].nome)}` : ""}</p>`;
-    /* mai un vicolo cieco: se la ricerca trova solo carte fuori epoca lo dice */
-    if (!dentroCh.length && fuori)
-      return chipCornici(base) + `<p class="vuoto">0 nella tua epoca · ${num(fuori)} fuori<br>
-        <button class="azione second" data-az="tutto">Guardale comunque</button></p>`;
-    return chipCornici(base) + riepilogo + grigliaCarte(ordinaCarte(dentroCh));
+    const testo = STATO.qCarte.trim();
+    MOSTRA_IT = !!testo;
+    const base = cerca(TUTTE, testo);
+
+    if (!testo) {
+      const ch = filtraCornici(base).filter(dentro);
+      const s = sagaDelCursore();
+      ULTIMA_CONTA = ch.length;
+      return chipCornici(base)
+        + `<p class="serie">${num(ch.length)} carte${epocaAttiva() && !STATO.soloNuove
+            ? ` · ${num(ch.filter(nuovaQui).length)} nuove con ${esc(SAGHE[s].nome)}` : ""}</p>`
+        + grigliaCarte(ordinaCarte(ch), "", "griglia");
+    }
+    const r = sezioniRicerca(base, testo, dentro, "c");
+    ULTIMA_CONTA = r.conta;
+    return `<span id="su"></span>` + r.html;
   };
   return {
-    titolo: "Tutte le carte", conta: num(disponibili()) + " nell'epoca",
-    testa: campoRicerca("Cerca una carta o un archetipo", STATO.qCarte, "qCarte"),
+    titolo: "Tutte le carte",
+    conta: testoConta(),
+    testa: campoRicerca("Cerca: drago bianco, zombie, eroi elementari…", STATO.qCarte, "qCarte"),
     corpo
   };
 }
+/* il numero in cima deve dire quello che si sta guardando, non un totale fisso */
+let ULTIMA_CONTA = null;
+const testoConta = () => STATO.qCarte.trim()
+  ? (ULTIMA_CONTA === null ? "" : num(ULTIMA_CONTA) + " trovate")
+  : num(disponibili()) + " nell'epoca";
 
 /* =====================================================================
    Vista DOVE — i duelli che regalano carte garantite

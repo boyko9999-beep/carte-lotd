@@ -27,20 +27,20 @@ await T('dettaglio busta con epoca DM', async () => {
   ok('barra di composizione a più colori', (await page.$$('.composizione i')).length >= 5);
   ok('legenda con le saghe', (await txt('.legenda')).includes('ARC-V'));
   const carte = await page.$$('.carta');
-  ok('griglia carte (100 per pagina)', carte.length === 100, 'trovate ' + carte.length);
+  ok('primo blocco da 300 piastrelle', carte.length === 300, 'trovate ' + carte.length);
   const fuori = await page.$$('.carta.fuori');
   ok('carte fuori epoca visibili e in grigio', fuori.length > 0, 'fuori: ' + fuori.length);
   const anni = await page.$$('.carta .anno');
   ok('anno sotto ogni carta', anni.length === carte.length);
+  ok('c\'è la coda che carica da sola', !!(await page.$('.sentinella')));
 });
 
 await T('nascondi fuori epoca', async () => {
   await page.click('[data-az="nascondi"]'); await page.waitForTimeout(120);
   ok('nessuna carta grigia', (await page.$$('.carta.fuori')).length === 0);
-  const b = await page.$eval('[data-altre="griglia"]', e => e.textContent).catch(() => '');
-  ok('paginazione coerente con 156 disponibili', b.includes('56'), b.trim());
-  await page.click('[data-altre="griglia"]'); await page.waitForTimeout(120);
-  ok('mostra tutte le 156', (await page.$$('.carta')).length === 156, String((await page.$$('.carta')).length));
+  ok('156 stanno sotto il blocco: disegnate tutte, niente coda',
+     (await page.$$('.carta')).length === 156 && !(await page.$('.sentinella')),
+     String((await page.$$('.carta')).length));
   await page.click('[data-az="nascondi"]');
 });
 
@@ -50,7 +50,7 @@ await T('filtro per cornice dentro la busta', async () => {
   const tutte = (await page.$$('.carta')).length;
   ok('filtro trappole attivo', tutte > 0 && tutte < 156, String(tutte));
   await page.click('[data-t="trap"]'); await page.waitForTimeout(150);
-  ok('filtro tolto', (await page.$$('.carta')).length === 100, String((await page.$$('.carta')).length));
+  ok('filtro tolto', (await page.$$('.carta')).length === 300, String((await page.$$('.carta')).length));
 });
 
 await T('scheda di una carta', async () => {
@@ -70,10 +70,10 @@ await T('vista Carte e ricerca per archetipo', async () => {
   await page.click('[data-v="carte"]'); await page.waitForSelector('[data-q="qCarte"]');
   await page.fill('[data-q="qCarte"]', 'Blue-Eyes'); await page.waitForTimeout(400);
   const r = await txt('#corpo .serie');
-  ok('trova le Blue-Eyes nell\'epoca DM', /^\d+ carte/.test(r) && !r.startsWith('0'), r);
+  ok('trova le Blue-Eyes nell\'epoca DM', /Carte «Blue-Eyes» · \d+/.test(r.replace(/\s+/g,' ')), r.replace(/\s+/g,' ').trim());
   await page.fill('[data-q="qCarte"]', 'Dark Magician'); await page.waitForTimeout(400);
   ok('cerca Dark Magician', (await page.$$('.carta')).length > 0);
-  await page.fill('[data-q="qCarte"]', 'Salamangreat'); await page.waitForTimeout(400);
+  await page.fill('[data-q="qCarte"]', 'Salamangreat'); await page.waitForTimeout(500);
   const v = await txt('#corpo');
   ok('vicolo cieco evitato: 0 nella tua epoca · N fuori', v.includes('0 nella tua epoca') && v.includes('fuori'), v.slice(0,120));
   await page.click('[data-az="tutto"]'); await page.waitForTimeout(300);
@@ -130,14 +130,14 @@ await T('regressioni corrette dalla revisione', async () => {
   await page.fill('[data-q="q"]', 'zzzznonesiste'); await page.waitForTimeout(400);
   ok('stato vuoto con via d\'uscita', !!(await page.$('[data-az="pulisci"]')));
   await page.click('[data-az="pulisci"]'); await page.waitForTimeout(300);
-  ok('togliere i filtri riporta le carte', (await page.$$('.carta')).length === 100,
+  ok('togliere i filtri riporta le carte', (await page.$$('.carta')).length === 300,
      String((await page.$$('.carta')).length));
 
   // nessuna carta duplicata
   await page.click('[data-az="indietro"]'); await page.click('[data-v="carte"]');
   await page.fill('[data-q="qCarte"]', 'Puzzlomino'); await page.waitForTimeout(400);
-  ok('nessun doppione nell\'indice', (await page.$$('.carta')).length === 1,
-     String((await page.$$('.carta')).length));
+  const n = await page.$$eval('.carta .n', e => e.filter(x => /Puzzlomino/.test(x.textContent)).length);
+  ok('nessun doppione nell\'indice', n === 1, String(n));
 });
 
 console.log('\n================  errori JS: ' + errori.length);

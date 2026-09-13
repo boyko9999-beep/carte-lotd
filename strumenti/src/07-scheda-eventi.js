@@ -24,8 +24,9 @@ function scheda(k) {
   v.innerHTML = `<div class="scheda">
     ${c[ID] ? `<img src="${imgGrande(c[ID])}" alt="${esc(c[N])}">` : ""}
     <h3>${esc(c[N])}</h3>
+    ${c[NI] && c[NI] !== c[N] ? `<div class="nome-it">${esc(c[NI])}</div>` : ""}
     <div class="meta">${[CORNICE[cornice(c)] ? CORNICE[cornice(c)][0] : "",
-      c[AR] >= 0 ? ARCHETIPI[c[AR]] : "", c[R] ? "rara" : ""]
+      razzaIt(c), attributoIt(c), c[AR] >= 0 ? ARCHETIPI[c[AR]] : "", c[R] ? "rara" : ""]
       .filter(Boolean).map(esc).join(" · ")}</div>
     <div class="blocco-scheda"><h4>Quando è uscita</h4>
       <div class="meta">${quando}</div>
@@ -146,7 +147,7 @@ document.addEventListener("click", e => {
   if ((t = el("[data-t]"))) {
     const c = t.dataset.t;
     STATO.tipiAttivi.has(c) ? STATO.tipiAttivi.delete(c) : STATO.tipiAttivi.add(c);
-    STATO.limite = 100;
+    azzeraLimiti();
     return ridisegnaCorpo();
   }
   if ((t = el("[data-v]"))) {
@@ -162,16 +163,16 @@ document.addEventListener("click", e => {
     case "tutto": return impostaCursore(ULTIMA);
     case "pulisci":
       STATO.q = ""; STATO.tipiAttivi = new Set(); STATO.nascondiFuori = false;
-      STATO.soloNuove = false; STATO.limite = 100;
+      STATO.soloNuove = false; azzeraLimiti();
       /* l'epoca di un mazzo aperto è una sua proprietà: non si azzera per
          sbaglio insieme ai filtri di una schermata */
       if (!m && STATO.cursore < ULTIMA) return impostaCursore(ULTIMA);
       return render();
-    case "solo-nuove": STATO.soloNuove = !STATO.soloNuove; STATO.limite = 100; return render();
+    case "solo-nuove": STATO.soloNuove = !STATO.soloNuove; azzeraLimiti(); return render();
 
-    case "ordine": STATO.ordine = STATO.ordine === "epoca" ? "nome" : "epoca"; return ridisegnaCorpo();
-    case "nascondi": STATO.nascondiFuori = !STATO.nascondiFuori; STATO.limite = 100; return ridisegnaCorpo();
-    case "fuori": STATO.mostraFuori = !STATO.mostraFuori; STATO.limite = 100; return ridisegnaCorpo();
+    case "ordine": STATO.ordine = STATO.ordine === "epoca" ? "nome" : "epoca"; azzeraLimiti(); return ridisegnaCorpo();
+    case "nascondi": STATO.nascondiFuori = !STATO.nascondiFuori; azzeraLimiti(); return ridisegnaCorpo();
+    case "fuori": STATO.mostraFuori = !STATO.mostraFuori; azzeraLimiti(); return ridisegnaCorpo();
     case "crea": {
       const nome = (document.getElementById("nm") || {}).value || STATO.nomeNuovo || "";
       const nuovo = nuovoMazzo(nome.trim() || "Mazzo " + (MAZZI.length + 1), STATO.cursore);
@@ -206,7 +207,7 @@ document.addEventListener("input", e => {
     const chiave = q.dataset.q;
     /* il testo entra subito nello stato (così un render lo conserva), solo il
        ridisegno aspetta: il campo non perde mai i tasti */
-    STATO[chiave] = q.value; STATO.limite = 100;
+    STATO[chiave] = q.value; azzeraLimiti();
     clearTimeout(attesaRicerca);
     attesaRicerca = setTimeout(ridisegnaCorpo, 200);
     return;
