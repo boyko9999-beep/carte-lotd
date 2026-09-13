@@ -116,14 +116,38 @@ await T('i filtri dividono structure, starter e giapponesi', async () => {
 await T('si cercano per nome, sigla e anno', async () => {
   await page.fill('[data-q="qUff"]', 'zombie'); await page.waitForTimeout(450);
   const zombi = await page.evaluate(() => [...document.querySelectorAll('[data-uff] .nome')].map(x => x.textContent.trim()));
-  ok('«zombie» trova i mazzi zombie', zombi.length >= 2 && zombi.every(n => /zombie/i.test(n)), zombi.join(' · '));
+  ok('«zombie» mette davanti i mazzi zombie',
+     zombi.length >= 3 && zombi.slice(0, 3).every(n => /zombie/i.test(n)), zombi.slice(0, 4).join(' · '));
   await page.fill('[data-q="qUff"]', 'SDY'); await page.waitForTimeout(450);
   const sdy = await page.evaluate(() => [...document.querySelectorAll('[data-uff] .nome')].map(x => x.textContent.trim()));
   ok('la sigla trova il suo mazzo', sdy.length === 1 && /Yugi/.test(sdy[0]), sdy.join(' · '));
   await page.fill('[data-q="qUff"]', 'revolver'); await page.waitForTimeout(450);
   const rev = await page.evaluate(() => [...document.querySelectorAll('[data-uff] .nome')].map(x => x.textContent.trim()));
   ok('e trova anche i giapponesi', rev.length === 1 && /Revolver/.test(rev[0]), rev.join(' · '));
+  await page.fill('[data-q="qUff"]', 'SDWA'); await page.waitForTimeout(450);
+  const sdwa = await page.evaluate(() => [...document.querySelectorAll('[data-uff] .nome')].map(x => x.textContent.trim()));
+  ok('la sigla esatta viene per prima', /Samurai/.test(sdwa[0]), sdwa.join(' · '));
   await page.fill('[data-q="qUff"]', ''); await page.waitForTimeout(450);
+});
+
+/* Un mazzo lo si cerca per quello che contiene, non per come si chiama la
+   scatola: «sei samurai» deve trovare «I Samurai Signori della Guerra». */
+await T('i mazzi si cercano per le carte che hanno dentro', async () => {
+  const prova = async (q, atteso, minimo) => {
+    await page.fill('[data-q="qUff"]', q); await page.waitForTimeout(500);
+    const primi = await page.evaluate(() => [...document.querySelectorAll('[data-uff]')].slice(0, 3)
+      .map(b => b.textContent.replace(/\s+/g, ' ').trim()));
+    ok(`«${q}» → ${atteso}`, primi.length && new RegExp(atteso, 'i').test(primi[0]),
+       (primi[0] || '(niente)').slice(0, 80));
+    if (minimo) ok(`   e dice quante carte c'entrano (≥${minimo})`,
+      new RegExp(`(\\d+) cart[ae] per`).test(primi[0]) &&
+      +primi[0].match(/(\d+) cart[ae] per/)[1] >= minimo, primi[0].slice(0, 90));
+  };
+  await prova('sei samurai', 'Samurai Signori della Guerra', 15);
+  await prova('zombie', 'Orda Zombie', 20);
+  await prova('eroi elementari', "HERO", 15);
+  await prova('drago bianco occhi blu', 'Drago Bianco Occhi Blu');
+  await page.fill('[data-q="qUff"]', ''); await page.waitForTimeout(400);
 });
 
 await T('aprire uno Starter Deck del 2002', async () => {

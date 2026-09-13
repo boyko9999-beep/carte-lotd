@@ -64,6 +64,11 @@ gioca; con un tocco diventa una tua ricetta, con la lista della spesa per andare
 a prendere le carte. L'archivio non dichiara quante copie ci siano nella scatola,
 quindi si parte con un esemplare per carta.
 
+Un mazzo si cerca per quello che contiene, non per come si chiama la scatola:
+*sei samurai* trova «I Samurai Signori della Guerra» (21 carte), *zombie* mette
+davanti «Orda Zombie» (27), *eroi elementari* trova gli HERO. Ogni riga dice
+quante delle sue carte c'entrano con quello che hai scritto.
+
 Il catalogo viene da yugipedia (le quattro categorie OCG/TCG × Structure/Starter,
 l'infobox di ogni prodotto e la sua pagina *Set Card Lists*), e la sigla è quella
 che sta davvero sui codici delle carte, non quella dichiarata nell'infobox — che
@@ -164,6 +169,6 @@ node strumenti/prova10-incolla.mjs  # lista incollata: lettura, nomi, epoca, cre
 node strumenti/prova11-ufficiali.mjs # mazzi ufficiali e pagina del database di Konami
 ```
 
-352 controlli su un Chromium headless. La prova 5 misura anche i tempi: avvio
+360 controlli su un Chromium headless. La prova 5 misura anche i tempi: avvio
 sotto i 200 ms, ricerca su 10.026 carte sotto il mezzo secondo, e il pulsante
 «Mostra altre carte» che non rallenta man mano che la griglia cresce.
