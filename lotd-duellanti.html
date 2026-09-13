@@ -386,12 +386,13 @@ function copertura(l) {
 }
 
 /* ================= archivio locale ================= */
+let dbPronto = null;      // riferimento sincrono: serve alla chiusura della pagina
 const DB = (() => {
   let p;
   const apri = () => p || (p = new Promise((res, rej) => {
     const r = indexedDB.open("lotd-le6", 1);
     r.onupgradeneeded = () => r.result.createObjectStore("kv");
-    r.onsuccess = () => res(r.result);
+    r.onsuccess = () => { dbPronto = r.result; res(r.result); };
     r.onerror = () => rej(r.error);
     setTimeout(() => rej(new Error("timeout")), 5000);
   }));
@@ -451,9 +452,22 @@ async function riconciliaMazzi() {
   }
   if (cambiato) render();
 }
-addEventListener("pagehide", () => { if (mazziSporchi) salvaMazzi(true); });
+/* Chiudendo la pagina non c'è tempo per un await: la transazione va aperta
+   nello stesso giro, altrimenti l'ultima carta aggiunta si perde. */
+function salvaSubito() {
+  if (!mazziSporchi) return;
+  if (dbPronto) {
+    try {
+      dbPronto.transaction("kv", "readwrite").objectStore("kv").put(MAZZI, "mazzi");
+      mazziSporchi = false;
+      return;
+    } catch (e) {}
+  }
+  salvaMazzi(true);
+}
+addEventListener("pagehide", salvaSubito);
 addEventListener("visibilitychange", () => {
-  if (document.hidden) { if (mazziSporchi) salvaMazzi(true); }
+  if (document.hidden) salvaSubito();
   else riconciliaMazzi();
 });
 
@@ -528,15 +542,26 @@ const plurale = (n, uno, tanti) => n === 1 ? uno : tanti;
 const mazzoDi = id => MAZZI.find(m => m.id === id) || null;
 const mazzoAperto = () => STATO.mazzo === null ? null : mazzoDi(STATO.mazzo);
 const copie = (m, nome) => (m && m.carte[nome]) || 0;
+/* conta() finisce dentro perchéNo(), quindi verrebbe rieseguita una volta per
+   ogni piastrella disegnata: si memorizza e si invalida a ogni modifica. */
+let versioneMazzi = 0;
+const contaCache = new Map();
 function conta(m, extra) {
+  const chiave = m.id + "|" + extra + "|" + versioneMazzi;
+  const pronto = contaCache.get(chiave);
+  if (pronto !== undefined) return pronto;
   let t = 0;
   for (const nome in m.carte) {
     const k = trovaCarta(nome);
     if (k === undefined) continue;
     if (eExtra(CARTE[k]) === extra) t += m.carte[nome];
   }
+  if (contaCache.size > 40) contaCache.clear();
+  contaCache.set(chiave, t);
   return t;
 }
+/* nomi salvati che l'indice non riconosce più: non devono sparire in silenzio */
+const nonRiconosciute = m => Object.keys(m.carte).filter(n => trovaCarta(n) === undefined);
 const elencoZona = (m, extra) => Object.keys(m.carte)
   .filter(n => { const k = trovaCarta(n); return k !== undefined && eExtra(CARTE[k]) === extra; });
 const fuoriEpoca = m => Object.keys(m.carte)
@@ -556,6 +581,7 @@ function aggiungi(m, k) {
   const n = CARTE[k][N];
   m.carte[n] = (m.carte[n] || 0) + 1;
   m.modificato = Date.now();
+  versioneMazzi++;
   salvaMazzi();
   return true;
 }
@@ -563,6 +589,7 @@ function togli(m, nome, tutte) {
   if (!m.carte[nome]) return;
   if (tutte || m.carte[nome] <= 1) delete m.carte[nome]; else m.carte[nome]--;
   m.modificato = Date.now();
+  versioneMazzi++;
   salvaMazzi();
 }
 function semaforo(m) {
@@ -756,13 +783,47 @@ function aggiornaControllo(k) {
   aggiornaPiede();
 }
 
-function grigliaCarte(chiavi, vuoto) {
-  const mostrate = chiavi.slice(0, STATO.limite);
+/* L'elenco disegnato resta a portata di mano: "Mostra altre carte" accoda le
+   nuove piastrelle invece di ricostruire da capo quelle già a schermo, che a
+   ogni tocco costerebbero sempre di più. */
+const CHIAVI = {};
+/* Raggiunto un limite cambia solo la disponibilità dei "+": si aggiornano i
+   nodi già a schermo, senza ricostruire una griglia da mille piastrelle. */
+function aggiornaDisponibilita() {
+  const m = mazzoAperto();
+  if (!m) return;
+  for (const b of document.querySelectorAll("[data-piu]")) {
+    const no = perchéNo(m, +b.dataset.piu);
+    b.disabled = !!no;
+    if (no) b.title = no; else b.removeAttribute("title");
+  }
+}
+function grigliaCarte(chiavi, vuoto, id) {
+  id = id || "griglia";
+  CHIAVI[id] = chiavi;
+  const limite = id === "fuori" ? STATO.limiteFuori : STATO.limite;
   if (!chiavi.length) return vuoto || `<p class="vuoto">Nessuna carta.</p>`;
-  return `<div class="carte">${mostrate.map(cartaHTML).join("")}</div>
-    ${chiavi.length > STATO.limite
-      ? `<button class="azione second" data-az="altre">Mostra altre carte (${num(chiavi.length - STATO.limite)} rimaste)</button>`
-      : ""}`;
+  return `<div class="carte" id="${id}">${chiavi.slice(0, limite).map(cartaHTML).join("")}</div>
+    ${bottoneAltre(id)}`;
+}
+function bottoneAltre(id) {
+  const chiavi = CHIAVI[id] || [];
+  const limite = id === "fuori" ? STATO.limiteFuori : STATO.limite;
+  if (chiavi.length <= limite) return "";
+  return `<button class="azione second" data-altre="${id}">Mostra altre carte
+    (${num(chiavi.length - limite)} rimaste)</button>`;
+}
+function accodaCarte(id) {
+  const griglia = document.getElementById(id), chiavi = CHIAVI[id] || [];
+  if (!griglia) return false;
+  const prima = id === "fuori" ? STATO.limiteFuori : STATO.limite;
+  const passo = id === "fuori" ? 60 : 100;
+  const dopo = Math.min(chiavi.length, prima + passo);
+  if (id === "fuori") STATO.limiteFuori = dopo; else STATO.limite = dopo;
+  griglia.insertAdjacentHTML("beforeend", chiavi.slice(prima, dopo).map(cartaHTML).join(""));
+  const b = document.querySelector(`[data-altre="${id}"]`);
+  if (b) b.outerHTML = bottoneAltre(id);
+  return true;
 }
 
 /* Carte che corrispondono al testo cercato: nome o archetipo.
@@ -1052,6 +1113,7 @@ function vistaMazzo() {
   if (!m) return vistaMazzi();
   const corpo = () => {
     const fuori = fuoriEpoca(m);
+    const ignote = nonRiconosciute(m);
     const extra = elencoZona(m, true), main = elencoZona(m, false);
     const gruppi = [["Mostri", main.filter(n => MOSTRI.has(cornice(CARTE[trovaCarta(n)])))],
       ["Magie", main.filter(n => cornice(CARTE[trovaCarta(n)]) === "spell")],
@@ -1060,6 +1122,9 @@ function vistaMazzo() {
     return `
       ${STATO.avvisoSalvataggio ? `<p class="avviso">Non riesco a salvare su questo dispositivo —
         copia il mazzo prima di chiudere.</p>` : ""}
+      ${ignote.length ? `<div class="avviso">Queste carte non sono più nell'archivio e non
+        vengono contate:<div>${ignote.map(n => `<span class="chip">${esc(n)}
+        <b data-via="${esc(n)}">✕</b></span>`).join("")}</div></div>` : ""}
       ${fuori.length ? `<div class="avviso">⚠ ${fuori.length}
         ${fuori.length === 1 ? "carta è fuori" : "carte sono fuori"} dalla tua epoca
         <div>${fuori.map(n => `<span class="chip">${esc(n)}
@@ -1125,10 +1190,7 @@ function vistaSelettore() {
       <p class="serie">${num(dentroCh.length)} carte nella tua epoca</p>
       ${vuoto || grigliaCarte(dentroCh)}
       ${fuoriCh.length ? `<p class="serie">Fuori dalla tua epoca · ${num(fuoriCh.length)}</p>
-        <div class="carte">${fuoriCh.slice(0, STATO.limiteFuori).map(cartaHTML).join("")}</div>
-        ${fuoriCh.length > STATO.limiteFuori ? `<button class="azione second" data-az="altre-fuori"
-          >Mostra altre carte fuori epoca (${num(fuoriCh.length - STATO.limiteFuori)} rimaste)</button>` : ""}`
-        : ""}`;
+        ${grigliaCarte(fuoriCh, "", "fuori")}` : ""}`;
   };
   return {
     titolo: "Aggiungi carte", indietro: true,
@@ -1267,9 +1329,17 @@ function scheda(k) {
   });
   const sel = v.querySelector("#selMazzo");
   if (sel) sel.onchange = () => {
-    if (!sel.value) return;
-    const mm = mazzoDi(sel.value);
-    if (mm && aggiungi(mm, k)) { v.remove(); apriMazzo(mm.id); }
+    const mm = sel.value && mazzoDi(sel.value);
+    sel.value = "";
+    if (!mm) return;
+    const no = perchéNo(mm, k);
+    if (no) {   // il mazzo è pieno o ha già 3 copie: dirlo, non tacere
+      const p = document.createElement("p");
+      p.className = "meta male"; p.textContent = `${mm.nome}: ${no}`;
+      sel.parentNode.appendChild(p);
+      return;
+    }
+    aggiungi(mm, k); v.remove(); apriMazzo(mm.id);
   };
   document.body.appendChild(v);
 }
@@ -1316,12 +1386,21 @@ document.addEventListener("click", e => {
   /* Raggiunto un limite, TUTTI i "+" a schermo vanno disattivati, non solo
      quello toccato: altrimenti restano accesi e non fanno niente. */
   const pieno = m => m ? (conta(m, false) >= 60) + "|" + (conta(m, true) >= 15) : "";
+  /* Nella schermata del mazzo tutto dipende dalle copie (contatori, sottototali,
+     avviso fuori epoca, righe che spariscono): lì si ridisegna il corpo intero,
+     che è corto. Nel selettore, con mille piastrelle, si aggiorna solo quel che
+     serve. */
+  const dopoModifica = (k, cambioPieno) => {
+    if (STATO.schermata === "mazzo") { ridisegnaCorpo(); return; }
+    aggiornaControllo(k);
+    if (cambioPieno) aggiornaDisponibilita();
+  };
   if ((t = el("[data-piu]"))) {
     const k = +t.dataset.piu, m = mazzoAperto();
     if (!m) return;
     const prima = pieno(m);
-    if (aggiungi(m, k) && pieno(m) === prima) aggiornaControllo(k);
-    else { ridisegnaCorpo(); aggiornaControllo(k); }   // anche la scheda, che vive fuori da #corpo
+    aggiungi(m, k);
+    dopoModifica(k, pieno(m) !== prima);
     return;
   }
   if ((t = el("[data-meno]"))) {
@@ -1329,8 +1408,11 @@ document.addEventListener("click", e => {
     if (!m) return;
     const prima = pieno(m);
     togli(m, CARTE[k][N]);
-    if (pieno(m) === prima) aggiornaControllo(k);
-    else { ridisegnaCorpo(); aggiornaControllo(k); }
+    dopoModifica(k, pieno(m) !== prima);
+    return;
+  }
+  if ((t = el("[data-altre]"))) {
+    if (!accodaCarte(t.dataset.altre)) ridisegnaCorpo();
     return;
   }
   if ((t = el("[data-via]"))) { const m = mazzoAperto(); togli(m, t.dataset.via, true); return render(); }
@@ -1370,8 +1452,7 @@ document.addEventListener("click", e => {
       if (!m && STATO.cursore < ULTIMA) return impostaCursore(ULTIMA);
       return render();
     case "solo-nuove": STATO.soloNuove = !STATO.soloNuove; STATO.limite = 100; return render();
-    case "altre": STATO.limite += 100; return ridisegnaCorpo();
-    case "altre-fuori": STATO.limiteFuori += 60; return ridisegnaCorpo();
+
     case "ordine": STATO.ordine = STATO.ordine === "epoca" ? "nome" : "epoca"; return ridisegnaCorpo();
     case "nascondi": STATO.nascondiFuori = !STATO.nascondiFuori; STATO.limite = 100; return ridisegnaCorpo();
     case "fuori": STATO.mostraFuori = !STATO.mostraFuori; STATO.limite = 100; return ridisegnaCorpo();
@@ -1386,7 +1467,9 @@ document.addEventListener("click", e => {
     case "apri-mazzo": return vaiA({ schermata: "mazzo" });
     case "spesa": return vaiA({ schermata: "spesa" });
     case "esporta": return vaiA({ schermata: "esporta" });
-    case "allarga": m.cursore = ULTIMA; STATO.cursore = ULTIMA; salvaMazzi(); return render();
+    case "allarga":
+      m.cursore = ULTIMA; STATO.cursore = ULTIMA; m.modificato = Date.now();
+      salvaMazzi(); return render();
     case "elimina":
       if (!confirm("Eliminare «" + m.nome + "»? Non si può annullare.")) return;
       MAZZI = MAZZI.filter(x => x.id !== m.id);
@@ -1422,14 +1505,28 @@ document.addEventListener("input", e => {
 /* =====================================================================
    Avvio
    ===================================================================== */
+/* Si disegna subito: i dati sono già in pagina, e se l'archivio locale è lento
+   o bloccato l'utente non deve guardare uno schermo vuoto. */
+render();
 (async function avvia() {
-  const c = await DB.get("cursore");
-  if (typeof c === "number" && c >= 0 && c <= ULTIMA) STATO.cursore = c;
-  const tolti = await DB.get("cancellati");
+  const [c, tolti, m] = await Promise.all([
+    DB.get("cursore"), DB.get("cancellati"), DB.get("mazzi")]);
+  let cambiato = false;
+  if (typeof c === "number" && c >= 0 && c <= ULTIMA && c !== STATO.cursore) {
+    STATO.cursore = c; cambiato = true;
+  }
   if (Array.isArray(tolti)) CANCELLATI = tolti;
-  const m = await DB.get("mazzi");
-  if (Array.isArray(m)) MAZZI = m.filter(x => x && x.id && x.carte && !CANCELLATI.includes(x.id));
-  render();
+  if (Array.isArray(m)) {
+    /* un mazzo con epoca mancante o fuori scala si sana, non si scarta */
+    MAZZI = m.filter(x => x && x.id && x.carte && !CANCELLATI.includes(x.id))
+      .map(x => Object.assign(x, {
+        nome: typeof x.nome === "string" && x.nome ? x.nome : "Mazzo",
+        cursore: typeof x.cursore === "number" && x.cursore >= 0 && x.cursore <= ULTIMA
+          ? x.cursore : ULTIMA
+      }));
+    if (MAZZI.length) cambiato = true;
+  }
+  if (cambiato) render();
 })();
 </script>
 </body>

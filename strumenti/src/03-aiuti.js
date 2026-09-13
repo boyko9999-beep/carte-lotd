@@ -1,11 +1,12 @@
 
 /* ================= archivio locale ================= */
+let dbPronto = null;      // riferimento sincrono: serve alla chiusura della pagina
 const DB = (() => {
   let p;
   const apri = () => p || (p = new Promise((res, rej) => {
     const r = indexedDB.open("lotd-le6", 1);
     r.onupgradeneeded = () => r.result.createObjectStore("kv");
-    r.onsuccess = () => res(r.result);
+    r.onsuccess = () => { dbPronto = r.result; res(r.result); };
     r.onerror = () => rej(r.error);
     setTimeout(() => rej(new Error("timeout")), 5000);
   }));
@@ -65,9 +66,22 @@ async function riconciliaMazzi() {
   }
   if (cambiato) render();
 }
-addEventListener("pagehide", () => { if (mazziSporchi) salvaMazzi(true); });
+/* Chiudendo la pagina non c'è tempo per un await: la transazione va aperta
+   nello stesso giro, altrimenti l'ultima carta aggiunta si perde. */
+function salvaSubito() {
+  if (!mazziSporchi) return;
+  if (dbPronto) {
+    try {
+      dbPronto.transaction("kv", "readwrite").objectStore("kv").put(MAZZI, "mazzi");
+      mazziSporchi = false;
+      return;
+    } catch (e) {}
+  }
+  salvaMazzi(true);
+}
+addEventListener("pagehide", salvaSubito);
 addEventListener("visibilitychange", () => {
-  if (document.hidden) { if (mazziSporchi) salvaMazzi(true); }
+  if (document.hidden) salvaSubito();
   else riconciliaMazzi();
 });
 
@@ -142,15 +156,26 @@ const plurale = (n, uno, tanti) => n === 1 ? uno : tanti;
 const mazzoDi = id => MAZZI.find(m => m.id === id) || null;
 const mazzoAperto = () => STATO.mazzo === null ? null : mazzoDi(STATO.mazzo);
 const copie = (m, nome) => (m && m.carte[nome]) || 0;
+/* conta() finisce dentro perchéNo(), quindi verrebbe rieseguita una volta per
+   ogni piastrella disegnata: si memorizza e si invalida a ogni modifica. */
+let versioneMazzi = 0;
+const contaCache = new Map();
 function conta(m, extra) {
+  const chiave = m.id + "|" + extra + "|" + versioneMazzi;
+  const pronto = contaCache.get(chiave);
+  if (pronto !== undefined) return pronto;
   let t = 0;
   for (const nome in m.carte) {
     const k = trovaCarta(nome);
     if (k === undefined) continue;
     if (eExtra(CARTE[k]) === extra) t += m.carte[nome];
   }
+  if (contaCache.size > 40) contaCache.clear();
+  contaCache.set(chiave, t);
   return t;
 }
+/* nomi salvati che l'indice non riconosce più: non devono sparire in silenzio */
+const nonRiconosciute = m => Object.keys(m.carte).filter(n => trovaCarta(n) === undefined);
 const elencoZona = (m, extra) => Object.keys(m.carte)
   .filter(n => { const k = trovaCarta(n); return k !== undefined && eExtra(CARTE[k]) === extra; });
 const fuoriEpoca = m => Object.keys(m.carte)
@@ -170,6 +195,7 @@ function aggiungi(m, k) {
   const n = CARTE[k][N];
   m.carte[n] = (m.carte[n] || 0) + 1;
   m.modificato = Date.now();
+  versioneMazzi++;
   salvaMazzi();
   return true;
 }
@@ -177,6 +203,7 @@ function togli(m, nome, tutte) {
   if (!m.carte[nome]) return;
   if (tutte || m.carte[nome] <= 1) delete m.carte[nome]; else m.carte[nome]--;
   m.modificato = Date.now();
+  versioneMazzi++;
   salvaMazzi();
 }
 function semaforo(m) {

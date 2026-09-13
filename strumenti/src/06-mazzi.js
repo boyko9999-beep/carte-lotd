@@ -85,6 +85,7 @@ function vistaMazzo() {
   if (!m) return vistaMazzi();
   const corpo = () => {
     const fuori = fuoriEpoca(m);
+    const ignote = nonRiconosciute(m);
     const extra = elencoZona(m, true), main = elencoZona(m, false);
     const gruppi = [["Mostri", main.filter(n => MOSTRI.has(cornice(CARTE[trovaCarta(n)])))],
       ["Magie", main.filter(n => cornice(CARTE[trovaCarta(n)]) === "spell")],
@@ -93,6 +94,9 @@ function vistaMazzo() {
     return `
       ${STATO.avvisoSalvataggio ? `<p class="avviso">Non riesco a salvare su questo dispositivo —
         copia il mazzo prima di chiudere.</p>` : ""}
+      ${ignote.length ? `<div class="avviso">Queste carte non sono più nell'archivio e non
+        vengono contate:<div>${ignote.map(n => `<span class="chip">${esc(n)}
+        <b data-via="${esc(n)}">✕</b></span>`).join("")}</div></div>` : ""}
       ${fuori.length ? `<div class="avviso">⚠ ${fuori.length}
         ${fuori.length === 1 ? "carta è fuori" : "carte sono fuori"} dalla tua epoca
         <div>${fuori.map(n => `<span class="chip">${esc(n)}
@@ -158,10 +162,7 @@ function vistaSelettore() {
       <p class="serie">${num(dentroCh.length)} carte nella tua epoca</p>
       ${vuoto || grigliaCarte(dentroCh)}
       ${fuoriCh.length ? `<p class="serie">Fuori dalla tua epoca · ${num(fuoriCh.length)}</p>
-        <div class="carte">${fuoriCh.slice(0, STATO.limiteFuori).map(cartaHTML).join("")}</div>
-        ${fuoriCh.length > STATO.limiteFuori ? `<button class="azione second" data-az="altre-fuori"
-          >Mostra altre carte fuori epoca (${num(fuoriCh.length - STATO.limiteFuori)} rimaste)</button>` : ""}`
-        : ""}`;
+        ${grigliaCarte(fuoriCh, "", "fuori")}` : ""}`;
   };
   return {
     titolo: "Aggiungi carte", indietro: true,

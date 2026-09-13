@@ -106,7 +106,7 @@ await T('le carte fuori epoca sono tutte raggiungibili', async () => {
   const t = await txt('#corpo');
   const m = t.match(/Fuori dalla tua epoca · ([\d.]+)/);
   ok('la sezione dichiara il totale', !!m, (t.match(/Fuori[^\n]{0,40}/) || [''])[0]);
-  const bottone = await page.$('[data-az="altre-fuori"]');
+  const bottone = await page.$('[data-altre="fuori"]');
   ok('c\'è il pulsante per vedere le altre', !!bottone);
   if (bottone) {
     const n1 = (await page.$$('.carta')).length;

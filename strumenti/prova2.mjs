@@ -37,9 +37,9 @@ await T('dettaglio busta con epoca DM', async () => {
 await T('nascondi fuori epoca', async () => {
   await page.click('[data-az="nascondi"]'); await page.waitForTimeout(120);
   ok('nessuna carta grigia', (await page.$$('.carta.fuori')).length === 0);
-  const b = await page.$eval('[data-az="altre"]', e => e.textContent).catch(() => '');
+  const b = await page.$eval('[data-altre="griglia"]', e => e.textContent).catch(() => '');
   ok('paginazione coerente con 156 disponibili', b.includes('56'), b.trim());
-  await page.click('[data-az="altre"]'); await page.waitForTimeout(120);
+  await page.click('[data-altre="griglia"]'); await page.waitForTimeout(120);
   ok('mostra tutte le 156', (await page.$$('.carta')).length === 156, String((await page.$$('.carta')).length));
   await page.click('[data-az="nascondi"]');
 });

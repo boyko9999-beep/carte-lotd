@@ -80,6 +80,9 @@ node strumenti/prova.mjs    # filtro epoca: saghe e anni cumulativi
 node strumenti/prova2.mjs   # buste, ricerca, duelli, scheda carta
 node strumenti/prova3.mjs   # costruttore di mazzi, lista della spesa, persistenza
 node strumenti/prova4.mjs   # scroll, epoca dei mazzi, cancellazioni, carte fuori epoca
+node strumenti/prova5.mjs   # reattività: avvio, griglia che cresce, ricerca, limiti
 ```
 
-134 controlli su un Chromium headless.
+145 controlli su un Chromium headless. La prova 5 misura anche i tempi: avvio
+sotto i 200 ms, ricerca su 10.026 carte sotto il mezzo secondo, e il pulsante
+«Mostra altre carte» che non rallenta man mano che la griglia cresce.

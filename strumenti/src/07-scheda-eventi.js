@@ -45,9 +45,17 @@ function scheda(k) {
   });
   const sel = v.querySelector("#selMazzo");
   if (sel) sel.onchange = () => {
-    if (!sel.value) return;
-    const mm = mazzoDi(sel.value);
-    if (mm && aggiungi(mm, k)) { v.remove(); apriMazzo(mm.id); }
+    const mm = sel.value && mazzoDi(sel.value);
+    sel.value = "";
+    if (!mm) return;
+    const no = perchéNo(mm, k);
+    if (no) {   // il mazzo è pieno o ha già 3 copie: dirlo, non tacere
+      const p = document.createElement("p");
+      p.className = "meta male"; p.textContent = `${mm.nome}: ${no}`;
+      sel.parentNode.appendChild(p);
+      return;
+    }
+    aggiungi(mm, k); v.remove(); apriMazzo(mm.id);
   };
   document.body.appendChild(v);
 }
@@ -94,12 +102,21 @@ document.addEventListener("click", e => {
   /* Raggiunto un limite, TUTTI i "+" a schermo vanno disattivati, non solo
      quello toccato: altrimenti restano accesi e non fanno niente. */
   const pieno = m => m ? (conta(m, false) >= 60) + "|" + (conta(m, true) >= 15) : "";
+  /* Nella schermata del mazzo tutto dipende dalle copie (contatori, sottototali,
+     avviso fuori epoca, righe che spariscono): lì si ridisegna il corpo intero,
+     che è corto. Nel selettore, con mille piastrelle, si aggiorna solo quel che
+     serve. */
+  const dopoModifica = (k, cambioPieno) => {
+    if (STATO.schermata === "mazzo") { ridisegnaCorpo(); return; }
+    aggiornaControllo(k);
+    if (cambioPieno) aggiornaDisponibilita();
+  };
   if ((t = el("[data-piu]"))) {
     const k = +t.dataset.piu, m = mazzoAperto();
     if (!m) return;
     const prima = pieno(m);
-    if (aggiungi(m, k) && pieno(m) === prima) aggiornaControllo(k);
-    else { ridisegnaCorpo(); aggiornaControllo(k); }   // anche la scheda, che vive fuori da #corpo
+    aggiungi(m, k);
+    dopoModifica(k, pieno(m) !== prima);
     return;
   }
   if ((t = el("[data-meno]"))) {
@@ -107,8 +124,11 @@ document.addEventListener("click", e => {
     if (!m) return;
     const prima = pieno(m);
     togli(m, CARTE[k][N]);
-    if (pieno(m) === prima) aggiornaControllo(k);
-    else { ridisegnaCorpo(); aggiornaControllo(k); }
+    dopoModifica(k, pieno(m) !== prima);
+    return;
+  }
+  if ((t = el("[data-altre]"))) {
+    if (!accodaCarte(t.dataset.altre)) ridisegnaCorpo();
     return;
   }
   if ((t = el("[data-via]"))) { const m = mazzoAperto(); togli(m, t.dataset.via, true); return render(); }
@@ -148,8 +168,7 @@ document.addEventListener("click", e => {
       if (!m && STATO.cursore < ULTIMA) return impostaCursore(ULTIMA);
       return render();
     case "solo-nuove": STATO.soloNuove = !STATO.soloNuove; STATO.limite = 100; return render();
-    case "altre": STATO.limite += 100; return ridisegnaCorpo();
-    case "altre-fuori": STATO.limiteFuori += 60; return ridisegnaCorpo();
+
     case "ordine": STATO.ordine = STATO.ordine === "epoca" ? "nome" : "epoca"; return ridisegnaCorpo();
     case "nascondi": STATO.nascondiFuori = !STATO.nascondiFuori; STATO.limite = 100; return ridisegnaCorpo();
     case "fuori": STATO.mostraFuori = !STATO.mostraFuori; STATO.limite = 100; return ridisegnaCorpo();
@@ -164,7 +183,9 @@ document.addEventListener("click", e => {
     case "apri-mazzo": return vaiA({ schermata: "mazzo" });
     case "spesa": return vaiA({ schermata: "spesa" });
     case "esporta": return vaiA({ schermata: "esporta" });
-    case "allarga": m.cursore = ULTIMA; STATO.cursore = ULTIMA; salvaMazzi(); return render();
+    case "allarga":
+      m.cursore = ULTIMA; STATO.cursore = ULTIMA; m.modificato = Date.now();
+      salvaMazzi(); return render();
     case "elimina":
       if (!confirm("Eliminare «" + m.nome + "»? Non si può annullare.")) return;
       MAZZI = MAZZI.filter(x => x.id !== m.id);
@@ -200,14 +221,28 @@ document.addEventListener("input", e => {
 /* =====================================================================
    Avvio
    ===================================================================== */
+/* Si disegna subito: i dati sono già in pagina, e se l'archivio locale è lento
+   o bloccato l'utente non deve guardare uno schermo vuoto. */
+render();
 (async function avvia() {
-  const c = await DB.get("cursore");
-  if (typeof c === "number" && c >= 0 && c <= ULTIMA) STATO.cursore = c;
-  const tolti = await DB.get("cancellati");
+  const [c, tolti, m] = await Promise.all([
+    DB.get("cursore"), DB.get("cancellati"), DB.get("mazzi")]);
+  let cambiato = false;
+  if (typeof c === "number" && c >= 0 && c <= ULTIMA && c !== STATO.cursore) {
+    STATO.cursore = c; cambiato = true;
+  }
   if (Array.isArray(tolti)) CANCELLATI = tolti;
-  const m = await DB.get("mazzi");
-  if (Array.isArray(m)) MAZZI = m.filter(x => x && x.id && x.carte && !CANCELLATI.includes(x.id));
-  render();
+  if (Array.isArray(m)) {
+    /* un mazzo con epoca mancante o fuori scala si sana, non si scarta */
+    MAZZI = m.filter(x => x && x.id && x.carte && !CANCELLATI.includes(x.id))
+      .map(x => Object.assign(x, {
+        nome: typeof x.nome === "string" && x.nome ? x.nome : "Mazzo",
+        cursore: typeof x.cursore === "number" && x.cursore >= 0 && x.cursore <= ULTIMA
+          ? x.cursore : ULTIMA
+      }));
+    if (MAZZI.length) cambiato = true;
+  }
+  if (cambiato) render();
 })();
 </script>
 </body>

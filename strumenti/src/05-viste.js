@@ -42,13 +42,47 @@ function aggiornaControllo(k) {
   aggiornaPiede();
 }
 
-function grigliaCarte(chiavi, vuoto) {
-  const mostrate = chiavi.slice(0, STATO.limite);
+/* L'elenco disegnato resta a portata di mano: "Mostra altre carte" accoda le
+   nuove piastrelle invece di ricostruire da capo quelle già a schermo, che a
+   ogni tocco costerebbero sempre di più. */
+const CHIAVI = {};
+/* Raggiunto un limite cambia solo la disponibilità dei "+": si aggiornano i
+   nodi già a schermo, senza ricostruire una griglia da mille piastrelle. */
+function aggiornaDisponibilita() {
+  const m = mazzoAperto();
+  if (!m) return;
+  for (const b of document.querySelectorAll("[data-piu]")) {
+    const no = perchéNo(m, +b.dataset.piu);
+    b.disabled = !!no;
+    if (no) b.title = no; else b.removeAttribute("title");
+  }
+}
+function grigliaCarte(chiavi, vuoto, id) {
+  id = id || "griglia";
+  CHIAVI[id] = chiavi;
+  const limite = id === "fuori" ? STATO.limiteFuori : STATO.limite;
   if (!chiavi.length) return vuoto || `<p class="vuoto">Nessuna carta.</p>`;
-  return `<div class="carte">${mostrate.map(cartaHTML).join("")}</div>
-    ${chiavi.length > STATO.limite
-      ? `<button class="azione second" data-az="altre">Mostra altre carte (${num(chiavi.length - STATO.limite)} rimaste)</button>`
-      : ""}`;
+  return `<div class="carte" id="${id}">${chiavi.slice(0, limite).map(cartaHTML).join("")}</div>
+    ${bottoneAltre(id)}`;
+}
+function bottoneAltre(id) {
+  const chiavi = CHIAVI[id] || [];
+  const limite = id === "fuori" ? STATO.limiteFuori : STATO.limite;
+  if (chiavi.length <= limite) return "";
+  return `<button class="azione second" data-altre="${id}">Mostra altre carte
+    (${num(chiavi.length - limite)} rimaste)</button>`;
+}
+function accodaCarte(id) {
+  const griglia = document.getElementById(id), chiavi = CHIAVI[id] || [];
+  if (!griglia) return false;
+  const prima = id === "fuori" ? STATO.limiteFuori : STATO.limite;
+  const passo = id === "fuori" ? 60 : 100;
+  const dopo = Math.min(chiavi.length, prima + passo);
+  if (id === "fuori") STATO.limiteFuori = dopo; else STATO.limite = dopo;
+  griglia.insertAdjacentHTML("beforeend", chiavi.slice(prima, dopo).map(cartaHTML).join(""));
+  const b = document.querySelector(`[data-altre="${id}"]`);
+  if (b) b.outerHTML = bottoneAltre(id);
+  return true;
 }
 
 /* Carte che corrispondono al testo cercato: nome o archetipo.
