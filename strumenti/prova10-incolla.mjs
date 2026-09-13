@@ -133,10 +133,17 @@ await T('una carta che non c\'è si può risolvere toccando', async () => {
      `ignote ${r.ignote} · carte ${r.carte}`);
 });
 
-await T('una voce si può togliere', async () => {
+await T('una carta si toglie e si rimette, senza che le righe scivolino', async () => {
   const prima = (await letto()).carte;
-  await page.click('[data-togli-voce]'); await page.waitForTimeout(300);
+  await page.evaluate(() => document.querySelector('#corpo .ris .via-voce').click());
+  await page.waitForTimeout(350);
   ok('una in meno', (await letto()).carte === prima - 1, `${prima} → ${(await letto()).carte}`);
+  ok('ma la riga resta lì, barrata', await page.$('#corpo .ris.tolta') !== null);
+  await page.evaluate(() => document.querySelector('#corpo [data-rimetti]').click());
+  await page.waitForTimeout(350);
+  ok('e si rimette', (await letto()).carte === prima, String((await letto()).carte));
+  await page.evaluate(() => document.querySelector('#corpo .ris .via-voce').click());
+  await page.waitForTimeout(300);
 });
 
 await T('un file .ydk fatto di soli codici', async () => {
@@ -305,6 +312,78 @@ await T('la ✕ toglie tutte le righe di quella carta', async () => {
   const r = await letto();
   ok('sparisce del tutto, non una riga sola', r.carte === 1 && r.nomi[0].startsWith('Dark Magician'),
      r.nomi.join(' · '));
+});
+
+/* I difetti trovati dalla revisione avversariale sulla lettura. */
+await T('l\'app sa rileggere il mazzo che ha appena esportato', async () => {
+  const male = await page.evaluate(() => {
+    const male = [];
+    for (let k = 0; k < CARTE.length; k++) {
+      const v = leggiLista(`2 ${CARTE[k][N]}`).voci[0];
+      if (!v || v.qta !== 2 || (v.stato !== "ok" && v.stato !== "vicina") || v.k !== k)
+        male.push(CARTE[k][N] + ' → ' + (v ? v.stato + ' ' + (v.k !== undefined ? CARTE[v.k][N] : v.testo) : 'niente'));
+    }
+    return male;
+  });
+  ok('tutte e 10.026 le carte tornano identiche',
+     male.length === 0 || (male.length === 1 && /Doppelganger/.test(male[0])),
+     male.slice(0, 4).join(' · ') || 'nessun errore');
+});
+
+await T('l\'epoca segue quello che c\'è davvero nel mazzo', async () => {
+  await leggi('3x Pot of Greed\n1x Accesscode Talker');
+  const prima = await page.evaluate(() => ({ cursore: STATO.cursore,
+    epoca: riassuntoLettura(STATO.lettura, STATO.scelteLettura).epoca }));
+  ok('parte dall\'epoca delle carte lette', prima.cursore === prima.epoca, JSON.stringify(prima));
+  await page.evaluate(() => document.querySelector('#corpo [data-scelta]').click());
+  await page.waitForTimeout(400);
+  const dopo = await page.evaluate(() => ({ cursore: STATO.cursore,
+    epoca: riassuntoLettura(STATO.lettura, STATO.scelteLettura).epoca }));
+  ok('risolvendo una carta più recente, l\'epoca si allarga da sola',
+     dopo.cursore === dopo.epoca && dopo.epoca > prima.epoca, JSON.stringify({ prima, dopo }));
+  await page.click('[data-az="crea-lista"]'); await page.waitForTimeout(500);
+  const m = await page.evaluate(() => { const m = mazzoAperto();
+    return m && { cursore: m.cursore, fuori: fuoriEpoca(m).length }; });
+  ok('e il mazzo nasce con quell\'epoca, senza carte fuori', m.fuori === 0 && m.cursore === dopo.epoca,
+     JSON.stringify(m));
+  await page.click('[data-az="indietro"]').catch(() => {});
+  await page.waitForTimeout(300);
+});
+
+await T('l\'epoca scelta a mano non viene più spostata', async () => {
+  await leggi('3x Pot of Greed\n1x Dark Magician');
+  await page.evaluate(() => { const b = [...document.querySelectorAll('[data-tacca]')]
+    .find(x => x.textContent.includes('Tutto il gioco')); if (b) b.click(); });
+  await page.waitForTimeout(400);
+  ok('resta dove l\'ho messa', await page.evaluate(() => STATO.cursore === ULTIMA && !STATO.epocaAuto),
+     String(await page.evaluate(() => STATO.cursore)));
+});
+
+await T('nel resoconto la scheda della carta non porta via da lì', async () => {
+  await page.evaluate(() => document.querySelector('#corpo .ris [data-c]').click());
+  await page.waitForSelector('.velo');
+  ok('niente menù «aggiungi a un mazzo»', await page.$('.velo #selMazzo') === null);
+  await page.click('.velo .chiudi'); await page.waitForTimeout(200);
+  ok('e il resoconto è ancora lì', await page.evaluate(() => STATO.schermata) === 'letto');
+});
+
+await T('le pieghe che buttano via parole si dichiarano', async () => {
+  await leggi('1 Elemental HERO Neos - Dominanc\n2 Pot of Greed (LOB-005)');
+  const r = await letto();
+  ok('la carta col codice del set entra in silenzio', r.nomi.includes('Pot of Greed×2'), r.nomi.join(' · '));
+  ok('quella a cui ho tolto la coda viene dichiarata',
+     (await corpo()).includes('interpretat'), (await corpo()).slice(0, 90));
+});
+
+await T('cifre a larghezza piena e altre stranezze', async () => {
+  await leggi('３ｘ Dark Magician\n2 Copia di Xing Zhen Hu\n3 Fusione Pendulum\n0x Pot of Greed');
+  const r = await letto();
+  ok('«３ｘ» vale come «3x»', r.nomi.includes('Dark Magician×3'), r.nomi.join(' · '));
+  ok('«Copia di Xing Zhen Hu» non diventa «Xing Zhen Hu»',
+     r.nomi.includes('Xing Zhen Hu Replica×2'), r.nomi.join(' · '));
+  ok('«Fusione Pendulum» non è un\'intestazione', r.nomi.some(n => /Pendulum Fusion|Fusione/.test(n)),
+     r.nomi.join(' · '));
+  ok('«0x» vuol dire nessuna copia', !r.nomi.some(n => /Pot of Greed/.test(n)), r.nomi.join(' · '));
 });
 
 console.log('\nerrori JS:', errori.length); errori.slice(0, 5).forEach(e => console.log('  !', e));

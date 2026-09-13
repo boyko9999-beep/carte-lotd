@@ -161,7 +161,7 @@ const STATO = {
   nomeNuovo: "",
   /* la lista incollata e quello che ne ho capito: vivono solo fino alla creazione */
   testoLista: "", lettura: null, scelteLettura: {}, nomeLettura: "", qUff: "",
-  scaricando: null, erroreRete: "",
+  scaricando: null, erroreRete: "", epocaAuto: false,
   avvisoSalvataggio: false
 };
 let MAZZI = [];

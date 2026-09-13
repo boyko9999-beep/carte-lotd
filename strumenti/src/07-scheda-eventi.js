@@ -36,7 +36,7 @@ function scheda(k) {
         ${esc(nomeLuogo(l))} · ${esc(dettaglioLuogoTesto(l))}</div>`).join("")}</div>
     ${m ? `<div class="scheda-mazzo"><span>In «${esc(m.nome)}»: <b class="copie-testo">${copie(m, c[N])} copie</b></span>
       ${controlloCopie(k, "largo")}</div>`
-      : MAZZI.length ? `<div class="scheda-mazzo"><select class="campo" id="selMazzo">
+      : MAZZI.length && STATO.schermata !== "letto" ? `<div class="scheda-mazzo"><select class="campo" id="selMazzo">
         <option value="">Aggiungi a un mazzo…</option>
         ${MAZZI.map(x => `<option value="${esc(x.id)}">${esc(x.nome)}</option>`).join("")}</select></div>` : ""}
     <button class="chiudi">Chiudi</button></div>`;
@@ -161,7 +161,12 @@ document.addEventListener("click", e => {
     tipiAttivi: new Set(), ritorno: STATO.schermata });
   if ((t = el("[data-g]"))) { STATO.gruppo = STATO.gruppo === t.dataset.g ? null : t.dataset.g; return ridisegnaCorpo(); }
   if ((t = el("[data-saga]"))) return impostaCursore(SAGHE[+t.dataset.saga].ultima);
-  if ((t = el("[data-tacca]"))) { if (t.dataset.tacca !== "") return impostaCursore(+t.dataset.tacca); return; }
+  if ((t = el("[data-tacca]"))) {
+    if (t.dataset.tacca === "") return;
+    /* scegliendo l'epoca a mano, il mazzo letto smette di spostarla da solo */
+    if (STATO.schermata === "letto") STATO.epocaAuto = false;
+    return impostaCursore(+t.dataset.tacca);
+  }
   if ((t = el("[data-mazzo]"))) return apriMazzo(t.dataset.mazzo);
   if ((t = el("[data-uff]"))) return apriUfficiale(+t.dataset.uff);
   if ((t = el("[data-nuovo]"))) {
@@ -183,27 +188,22 @@ document.addEventListener("click", e => {
   if ((t = el("[data-scelta]"))) {
     const [i, k] = t.dataset.scelta.split(":").map(Number);
     STATO.scelteLettura[i] = k;
-    return ridisegnaCorpo();
+    if (STATO.lettura && STATO.lettura.voci[i]) STATO.lettura.voci[i].tolta = false;
+    seguiEpoca();
+    return render();
   }
-  if ((t = el("[data-togli-voce]"))) {
-    /* una carta può venire da più righe della lista: si tolgono tutte, dalla
-       più in fondo, così gli indici di quelle prima restano buoni */
-    const indici = String(t.dataset.togliVoce).split(",").map(Number)
-      .filter(x => !isNaN(x)).sort((a, b) => b - a);
-    for (const i of indici) {
-      if (!STATO.lettura || !STATO.lettura.voci[i]) continue;
-      STATO.lettura.voci.splice(i, 1);
-      /* le scelte sono indicizzate sulle voci: vanno fatte scorrere anche loro */
-      const nuove = {};
-      for (const j in STATO.scelteLettura) {
-        const x = +j;
-        if (x < i) nuove[x] = STATO.scelteLettura[j];
-        else if (x > i) nuove[x - 1] = STATO.scelteLettura[j];
-      }
-      STATO.scelteLettura = nuove;
-    }
-    return ridisegnaCorpo();
+  if ((t = el("[data-togli-voce]")) || (t = el("[data-rimetti]"))) {
+    /* le voci non si cancellano: si barrano e si possono rimettere. Così gli
+       indici restano quelli (le scelte non scivolano) e la riga non sparisce
+       da sotto il dito portandosi dietro quella dopo. */
+    const tolta = t.dataset.togliVoce !== undefined;
+    const quali = String(tolta ? t.dataset.togliVoce : t.dataset.rimetti).split(",").map(Number);
+    for (const i of quali)
+      if (STATO.lettura && STATO.lettura.voci[i]) STATO.lettura.voci[i].tolta = tolta;
+    seguiEpoca();
+    return render();
   }
+
   if (!(t = el("[data-az]"))) return;
   const m = mazzoAperto();
   switch (t.dataset.az) {

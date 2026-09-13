@@ -272,6 +272,8 @@
   .quante{flex:none;align-self:center;font-size:15px;color:var(--gold);font-weight:600}
   .via-voce{flex:none;align-self:center;padding:4px 8px;color:var(--muted);font-size:15px;line-height:1}
   .via-voce:hover{color:var(--rosso)}
+  .ris.tolta{opacity:.5}
+  .ris.tolta .nome{text-decoration:line-through}
   .ignota{margin-top:8px}
   .ignota b{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;color:var(--text)}
   .avviso .chip{cursor:pointer}
@@ -453,7 +455,7 @@ const STATO = {
   nomeNuovo: "",
   /* la lista incollata e quello che ne ho capito: vivono solo fino alla creazione */
   testoLista: "", lettura: null, scelteLettura: {}, nomeLettura: "", qUff: "",
-  scaricando: null, erroreRete: "",
+  scaricando: null, erroreRete: "", epocaAuto: false,
   avvisoSalvataggio: false
 };
 let MAZZI = [];
@@ -1858,11 +1860,17 @@ function riconosci(testo) {
   const t = String(testo).trim();
   if (!t) return { stato: "ignota", scelte: [] };
   const prove = varianti(t);
-  for (let i = 1; i < prove.length; i++) {
-    const r = riconosciEsatto(prove[i - 1]);
-    if (r.stato !== "ignota") return r;
+  let ultimo = { stato: "ignota", scelte: [] };
+  for (let i = 0; i < prove.length; i++) {
+    const ultima = i === prove.length - 1;
+    /* i suggerimenti si calcolano una volta sola, sull'ultimo tentativo */
+    ultimo = riconosciEsatto(prove[i].t, ultima ? t : undefined);
+    if (ultimo.stato === "ignota") continue;
+    /* se per trovarla ho dovuto buttare via delle parole, lo dico */
+    return prove[i].taglio && ultimo.stato === "ok"
+      ? { stato: "vicina", k: ultimo.k, scelte: [ultimo.k] } : ultimo;
   }
-  return riconosciEsatto(prove[prove.length - 1], t);
+  return ultimo;
 }
 function riconosciEsatto(testo, perSuggerimenti) {
   const t = String(testo).trim();
@@ -1875,9 +1883,9 @@ function riconosciEsatto(testo, perSuggerimenti) {
      inglese ED è il nome italiano di un'altra — e lì si chiede, invece di far
      vincere l'inglese per decreto e sbagliare in silenzio */
   if (k1 !== undefined && k2 !== undefined && k1 !== k2)
-    return { stato: "scelta", scelte: [k1, k2] };
-  if (k1 !== undefined) return { stato: "ok", k: k1 };
-  if (k2 !== undefined) return { stato: "ok", k: k2 };
+    return { stato: "scelta", scelte: [k1, k2], conflitto: true };
+  if (k1 !== undefined) return { stato: "ok", k: k1, lingua: "en" };
+  if (k2 !== undefined) return { stato: "ok", k: k2, lingua: "it" };
   const n = senzaSegni(t);                              // senza trattini, accenti, apostrofi
   if (!n) return { stato: "ignota", scelte: [] };
   for (const mappa of [NORM_EN, NORM_IT]) {
@@ -1945,43 +1953,65 @@ const NUMERI_IT = { una: 1, uno: 1, un: 1, due: 2, tre: 3 };
    segno esplicito, per ultima «3 Nome», che è anche l'inizio di «3-Hump Lacooda».
    «Harpie Lady 3» invece è un nome intero: un numero in coda vale come quantità
    solo se è staccato da una tabulazione o da più spazi. */
-/* restituisce [quantità, resto, esplicita] */
-function staccaQuantita(t) {
-  let m;
-  /* la «x» del moltiplicatore o sta attaccata al numero («3x Nome») o ha uno
-     spazio dopo («3 x Nome»): senza questa distinzione «2 XX-Saber Faultroll»
-     diventava due copie di «X-Saber Faultroll», che è un'altra carta */
-  if ((m = t.match(/^(\d{1,2})[x×*]\s*(.+)$/i))) return [+m[1], m[2], true];
-  if ((m = t.match(/^(\d{1,2})\s*[x×*]\s+(.+)$/i))) return [+m[1], m[2], true];
-  if ((m = t.match(/^[x×]\s*(\d{1,2})[\s.:-]+(.+)$/i))) return [+m[1], m[2], true];
-  if ((m = t.match(/^(\d{1,2})\s+(?:copie|copia|volte)\s+(?:di\s+)?(.+)$/i))) return [+m[1], m[2], true];
-  if ((m = t.match(/^(una|uno|un|due|tre)\s+(?:copie|copia)\s+di\s+(.+)$/i))) return [NUMERI_IT[m[1].toLowerCase()], m[2], true];
-  if ((m = t.match(/^(una|uno|un|due|tre)\s+(.+)$/i))) return [NUMERI_IT[m[1].toLowerCase()], m[2], true];
-  if ((m = t.match(/^(.+?)\s*[([]\s*[x×*]\s*(\d{1,2})\s*[)\]]$/i))) return [+m[2], m[1], true];
-  if ((m = t.match(/^(.+?)\s*[x×*]\s*(\d{1,2})$/i))) return [+m[2], m[1], true];
-  if ((m = t.match(/^(.+?)\s*[([]\s*(\d{1,2})\s*[)\]]$/))) return [+m[2], m[1], true];
-  if ((m = t.match(/^(.+?)\s*:\s*(\d{1,2})$/))) return [+m[2], m[1], true];
-  if ((m = t.match(/^(.+?)[\s.·•_]{2,}(\d{1,2})$/))) return [+m[2], m[1], true];
-  if ((m = t.match(/^(.+?)(?:\t+|\s{2,})(\d{1,2})$/))) return [+m[2], m[1], true];
-  if ((m = t.match(/^(\d{1,2})[\s.:-]+(.+)$/))) return [+m[1], m[2], true];
-  return [1, t, false];
+/* Tutte le letture possibili della quantità, dalla più sicura alla più
+   generosa. Non se ne sceglie una a priori: si prende la prima che lascia un
+   nome di carta VERO, così «3 Copia di Xing Zhen Hu» resta la carta che si
+   chiama «Copia di Xing Zhen Hu» e non tre copie di «Xing Zhen Hu», che è
+   un'altra carta. Ogni voce è [quantità, resto, esplicita]. */
+function quantitaCandidate(t) {
+  const out = [];
+  const p = (re, q, r, e) => { const m = t.match(re); if (m) out.push([+q(m) || 1, r(m), e !== false]); };
+  p(/^(\d{1,2})[x×*]\s*(.+)$/i, m => m[1], m => m[2]);
+  p(/^(\d{1,2})\s*[x×*]\s+(.+)$/i, m => m[1], m => m[2]);
+  p(/^[x×]\s*(\d{1,2})[\s.:-]+(.+)$/i, m => m[1], m => m[2]);
+  /* «2 Copia di Xing Zhen Hu» è una carta che si chiama così: il numero in testa
+     e basta si prova PRIMA di leggere «copia di» come «due copie di» */
+  p(/^(\d{1,2})[\s.:-]+(.+)$/, m => m[1], m => m[2]);
+  p(/^(\d{1,2})\s+(?:copie|copia|volte)\s+(?:di\s+)?(.+)$/i, m => m[1], m => m[2]);
+  p(/^(una|uno|un|due|tre)\s+(?:copie|copia)\s+di\s+(.+)$/i, m => NUMERI_IT[m[1].toLowerCase()], m => m[2]);
+  p(/^(una|uno|un|due|tre)\s+(.+)$/i, m => NUMERI_IT[m[1].toLowerCase()], m => m[2]);
+  p(/^(.+?)\s*[([]\s*[x×*]\s*(\d{1,2})\s*[)\]]$/i, m => m[2], m => m[1]);
+  /* la «x» in coda vuole uno spazio davanti: «Pot of Greed x3» sì, ma
+     «TG-SX1», «TGX3-DX2» e «Victory Viper XX03» sono nomi di carte vere */
+  p(/^(.+?)\s+[x×*]\s*(\d{1,2})$/i, m => m[2], m => m[1]);
+  p(/^(.+?)\s*[([]\s*(\d{1,2})\s*[)\]]$/, m => m[2], m => m[1]);
+  p(/^(.+?)\s*[:,–—-]\s*(\d{1,2})$/, m => m[2], m => m[1]);
+  p(/^(.+?)[\s.·•_]{2,}(\d{1,2})$/, m => m[2], m => m[1]);
+  p(/^(.+?)(?:\t+|\s{2,})(\d{1,2})$/, m => m[2], m => m[1]);
+  p(/^(\d{1,2})[\s.:-]+(.+)$/, m => m[1], m => m[2]);
+  out.push([1, t, false]);
+  return out.filter(x => x[0] >= 1 && x[0] <= 99 && String(x[1]).trim());
+}
+const staccaQuantita = t => quantitaCandidate(t)[0];
+/* la lettura migliore: la prima che dà una carta vera, altrimenti la prima */
+function leggiPezzo(t) {
+  const cand = quantitaCandidate(t);
+  for (const [q, resto, esplicita] of cand) {
+    const r = riconosciEsatto(String(resto).trim());
+    if (r.stato !== "ignota") return { q, resto: String(resto).trim(), esplicita, ris: r };
+  }
+  const [q, resto, esplicita] = cand[0];
+  return { q, resto: String(resto).trim(), esplicita, ris: null };
 }
 
 /* Quello che resta attaccato al nome nelle liste vere: il codice del set, la
    rarità, il nome italiano fra parentesi. Si tolgono solo se il nome così com'è
    non esiste — «Destiny HERO - Dominance» non va toccata. */
 function varianti(t) {
-  const out = [t];
-  /* nessuno dei 10.026 nomi contiene una parentesi: quello che sta fra parentesi
-     è sempre roba aggiunta da chi ha scritto la lista */
+  /* taglio=true quando la ripulitura ha buttato via delle PAROLE: lì non si
+     tace, si dichiara. Togliere un codice fra parentesi invece è sempre giusto,
+     perché nessuno dei 10.026 nomi contiene una parentesi. */
+  const out = [{ t, taglio: false }];
   const senzaParentesi = t.replace(/\s*[([][^)\]]*[)\]]\s*/g, " ").replace(/\s+/g, " ").trim();
-  if (senzaParentesi && senzaParentesi !== t) out.push(senzaParentesi);
-  let x = out[out.length - 1];
+  if (senzaParentesi && senzaParentesi !== t) out.push({ t: senzaParentesi, taglio: false });
+  let x = out[out.length - 1].t, taglio = false;
   for (let i = 0; i < 3; i++) {
-    const y = x.replace(/\s*[([][^)\]]*[)\]]\s*$/, "")
-      .replace(/\s+[-–—]\s+[A-Za-zÀ-ÿ ]{3,20}$/, "").trim();
-    if (!y || y === x) break;
-    out.push(y); x = y;
+    const a = x.replace(/\s*[([][^)\]]*[)\]]\s*$/, "").trim();
+    const b = a.replace(/\s+[-–—]\s+[A-Za-zÀ-ÿ ]{3,20}$/, "").trim();
+    if (!b || b === x) break;
+    taglio = taglio || b !== a;
+    out.push({ t: b, taglio });
+    x = b;
   }
   return out;
 }
@@ -2074,7 +2104,8 @@ function leggiLista(testo) {
     const gia = indice.get(chiave);
     if (gia !== undefined) { voci[gia].qta += qta; return; }
     indice.set(chiave, voci.length);
-    voci.push({ qta, testo: grezzo, stato: ris.stato, k: ris.k, scelte: ris.scelte || [] });
+    voci.push({ qta, testo: grezzo, stato: ris.stato, k: ris.k, scelte: ris.scelte || [],
+      conflitto: !!ris.conflitto, lingua: ris.lingua });
   };
   /* la prossima riga che conta davvero: si saltano le vuote e le targhette */
   const prossima = i => {
@@ -2087,7 +2118,8 @@ function leggiLista(testo) {
   };
 
   for (let i = 0; i < righe.length; i++) {
-    let r = String(righe[i]).replace(/ /g, " ").trim();
+    /* NFKC: le cifre e le lettere a larghezza piena («３ｘ») diventano normali */
+    let r = String(righe[i]).normalize("NFKC").replace(/\u00a0/g, " ").trim();
     if (!r || r.startsWith("//")) continue;
     /* i commenti: «# Mazzo di prova» dà il nome, «#main» e «!side» dei .ydk no */
     if (r[0] === "#" || r[0] === "!") {
@@ -2107,28 +2139,32 @@ function leggiLista(testo) {
     /* la riga intera è già una carta? allora non si spezza e non si interpreta:
        «Adreus, Keeper of Armageddon» e «Pot of Greed» finiscono qui */
     const intero = riconosciEsatto(r);
-    if (intero.stato !== "ok" && soloParoleDiSezione(r)) { dentroSide(r); saltate++; continue; }
+    /* Una riga è un'intestazione, spazzatura o un titolo solo se, provate tutte
+       le letture della quantità, non resta comunque una carta: «3 Fusione
+       Pendulum» e «2 Effetto Xyz» sono carte, non nomi di sezione, e
+       «3 Deck Devastation Virus» è una carta, non il titolo del mazzo. */
+    const conQuantita = intero.stato !== "ok" ? leggiPezzo(r).ris : intero;
+    if (!conQuantita && soloParoleDiSezione(r)) { dentroSide(r); saltate++; continue; }
     /* «7» è una carta vera, ma in un elenco numerato è quasi sempre il numero
        della riga: se subito sotto c'è un nome di carta, è un numero di riga.
        Senza questo, la pagina di Konami regalava tre copie di «7» al mazzo. */
     if (intero.stato === "ok" && /^\d{1,3}$/.test(r)) {
       const j = prossima(i + 1);
-      if (j >= 0 && riconosciEsatto(righe[j].trim().replace(SEGNI_PRIMA, "")
+      if (j >= 0 && riconosciEsatto(righe[j].normalize("NFKC").trim().replace(SEGNI_PRIMA, "")
           .replace(SEGNI_DOPO, "").trim()).stato === "ok") { saltate++; continue; }
     }
-    /* righe senza nemmeno una lettera: righelli, conteggi, numeri sparsi. Si
-       scartano DOPO aver provato il nome, perché esiste una carta che si chiama
-       «7», e dopo aver provato a staccare la quantità, perché «3 7» sono tre. */
-    if (intero.stato !== "ok" && !/[a-z]/i.test(r) && !/^\d{6,9}$/.test(r)
-        && riconosciEsatto(staccaQuantita(r)[1].trim()).stato !== "ok") { saltate++; continue; }
+    /* righe senza nemmeno una lettera: righelli, conteggi, numeri sparsi */
+    if (!conQuantita && !/[a-z]/i.test(r) && !/^\d{6,9}$/.test(r)) { saltate++; continue; }
     /* il titolo in cima («Mazzo Exodia — lista di Marti») dà il nome al mazzo */
-    if (intero.stato !== "ok" && nome === null && !voci.length
+    if (!conQuantita && nome === null && !voci.length
         && /^(?:mazzo|deck|lista|decklist)\b/i.test(r) && r.split(/\s+/).length > 1) {
       nome = r; saltate++; continue;
     }
     const pezzi = intero.stato === "ok" ? [r] : spezzaRiga(r);
     const ultimo = pezzi[pezzi.length - 1];
     for (const pezzo of pezzi) {
+      /* zero copie vuol dire «questa no»: si salta */
+      if (/^0\s*[x×*]?[\s.:-]+\S/.test(pezzo)) { saltate++; continue; }
       /* prima il nome così com'è, ma solo esatto: «7 Colored Fish» e «7» sono
          carte vere, mentre «Pot of Greed (3)» è una carta più una quantità */
       let ris = riconosciEsatto(pezzo), qta = 1, grezzo = pezzo, esplicita = false;
@@ -2138,14 +2174,13 @@ function leggiLista(testo) {
         if (k !== undefined) ris = { stato: "ok", k };
       }
       if (ris.stato !== "ok") {
-        const [q, resto, scritta] = staccaQuantita(pezzo);
-        if (q < 1 || q > 99 || !resto.trim()) { saltate++; continue; }
-        const r2 = riconosci(resto.trim());
+        const p = leggiPezzo(pezzo);
+        const r2 = p.ris || riconosci(p.resto);
         /* la coda condivisa si prova solo su una riga davvero spezzata */
         const r3 = r2.stato === "ignota" && pezzi.length > 1 && pezzo !== ultimo
-          ? completaConCoda(resto.trim(), staccaQuantita(ultimo)[1].trim())
+          ? completaConCoda(p.resto, leggiPezzo(ultimo).resto)
           : null;
-        ris = r3 || r2; qta = q; grezzo = resto.trim(); esplicita = scritta;
+        ris = r3 || r2; qta = p.q; grezzo = p.resto; esplicita = p.esplicita;
       }
       /* una frase di discorso non è una carta scritta male: si lascia perdere in
          silenzio (il nome più lungo dell'archivio è di nove parole) */
@@ -2163,6 +2198,16 @@ function leggiLista(testo) {
       if (nelSide) { side += qta; continue; }
       aggiungiVoce(qta, grezzo, ris);
     }
+  }
+  /* «Doppelganger» è il nome inglese di una carta e quello italiano di un'altra:
+     è l'unico caso in tutto l'archivio. Da sola la riga resta una domanda, ma se
+     tutta la lista è scritta in una lingua sola la domanda ha già risposta —
+     così l'app sa rileggere il mazzo che ha appena esportato. */
+  const lingue = voci.reduce((a, v) => (v.lingua && a[v.lingua]++, a), { en: 0, it: 0 });
+  for (const v of voci) {
+    if (!v.conflitto || v.scelte.length < 2) continue;
+    if (lingue.en >= lingue.it + 2) { v.stato = "vicina"; v.k = v.scelte[0]; }
+    else if (lingue.it >= lingue.en + 2) { v.stato = "vicina"; v.k = v.scelte[1]; }
   }
   return { nome, voci, saltate, side, dichiarati };
 }
@@ -2249,6 +2294,7 @@ function leggiHtmlKonami(html) {
    una saga — e risparmia all'utente di andarla a cercare. */
 function riassuntoLettura(l, scelte) {
   const ignote = [], daScegliere = [], interpretate = [];
+  const tolte = new Map();
   /* Le voci si fondono sulla carta a cui puntano DOPO che le scelte sono state
      risolte, non sul testo di partenza: «3x Pot of Greed» e «2x Pot of Gred»
      sono la stessa carta, e il limite di 3 copie vale sul totale. Fondendo sul
@@ -2261,6 +2307,11 @@ function riassuntoLettura(l, scelte) {
       : (v.stato === "ok" || v.stato === "vicina") ? v.k : undefined;
     if (k === undefined) {
       (v.stato === "scelta" ? daScegliere : ignote).push({ i, v });
+      continue;
+    }
+    if (v.tolta) {
+      const t = tolte.get(k) || { k, voci: [] };
+      t.voci.push(i); tolte.set(k, t);
       continue;
     }
     if (v.stato === "vicina" && scelto === undefined) interpretate.push({ i, v, k });
@@ -2279,7 +2330,8 @@ function riassuntoLettura(l, scelte) {
   /* una carta senza data di uscita nota non può stringere l'epoca: conta come «tutto» */
   const epoca = chiavi.length
     ? chiavi.reduce((a, k) => Math.max(a, CARTE[k][T] < 0 ? ULTIMA : CARTE[k][T]), 0) : ULTIMA;
-  return { carte, tagliate, ignote, daScegliere, interpretate, main, extra, epoca };
+  return { carte, tagliate, ignote, daScegliere, interpretate, main, extra, epoca,
+    tolte: [...tolte.values()] };
 }
 
 function creaDaLettura(nome, cursore, r) {
@@ -2303,8 +2355,17 @@ function apriLettura(l) {
   STATO.nomeLettura = l.nome || "";
   entraInContesto();
   STATO.cursore = riassuntoLettura(l, {}).epoca;
+  STATO.epocaAuto = true;          // finché non la scegli tu, l'epoca segue il mazzo
   STATO.soloNuove = false;
   vaiA({ schermata: "letto" });
+}
+/* Ogni volta che la lettura cambia — una carta risolta, una tolta, una rimessa —
+   l'epoca minima cambia con lei. Senza questo il resoconto mostrava un'epoca e
+   il mazzo ne prendeva un'altra. */
+function seguiEpoca() {
+  if (!STATO.lettura || !STATO.epocaAuto) return;
+  const e = riassuntoLettura(STATO.lettura, STATO.scelteLettura).epoca;
+  if (e !== STATO.cursore) STATO.cursore = Math.max(0, Math.min(ULTIMA, e));
 }
 async function leggiIndirizzo(u) {
   STATO.scaricando = u; STATO.erroreRete = "";
@@ -2344,17 +2405,18 @@ function vistaIncolla() {
 }
 
 /* una riga del resoconto: la carta, quante copie, e come toglierla */
-function rigaLetta(k, qta, voci) {
+function rigaLetta(k, qta, voci, tolta) {
   const c = CARTE[k];
-  return `<div class="ris">
+  return `<div class="ris${tolta ? " tolta" : ""}">
     <button class="tocca-ris" data-c="${k}">
       ${c[ID] ? `<img src="${img(c[ID])}" alt="" loading="lazy">` : `<div class="vuota"></div>`}</button>
     <span style="min-width:0;flex:1">
       <button class="tocca-ris" data-c="${k}"><span class="nome">${esc(c[N])}</span></button>
       ${c[NI] && c[NI] !== c[N] ? `<small class="it">${esc(c[NI])}</small>` : ""}
       <small>${esc(CORNICE[cornice(c)] ? CORNICE[cornice(c)][0] : "")} · ${c[A] || "?"}</small></span>
-    <span class="quante">${qta}×</span>
-    <button class="via-voce" data-togli-voce="${voci.join(",")}" aria-label="Togli ${esc(c[N])}">✕</button></div>`;
+    ${tolta ? `<button class="chip" data-rimetti="${voci.join(",")}">Rimetti</button>`
+      : `<span class="quante">${qta}×</span>
+    <button class="via-voce" data-togli-voce="${voci.join(",")}" aria-label="Togli ${esc(c[N])}">✕</button>`}</div>`;
 }
 
 function vistaLetto() {
@@ -2402,9 +2464,12 @@ function vistaLetto() {
       ${r.tagliate.map(t => `${esc(t.nome)} (ne chiedeva ${t.chieste})`).join(" · ")}</div>` : "";
 
     if (!totale && !r.ignote.length && !r.daScegliere.length && !r.interpretate.length)
-      return `<p class="vuoto">In quel testo non ho trovato nessuna carta.<br>
-        Controlla di aver incollato la lista giusta.</p>
-        <button class="azione second" data-az="indietro">Torna a incollare</button>`;
+      return r.tolte.length
+        ? `<p class="vuoto">Hai tolto tutte le carte.</p>
+           <button class="azione second" data-rimetti="${r.tolte.reduce((a, x) => a.concat(x.voci), []).join(",")}">Rimettile</button>`
+        : `<p class="vuoto">In quel testo non ho trovato nessuna carta.<br>
+           Controlla di aver incollato la lista giusta.</p>
+           <button class="azione second" data-az="indietro">Torna a incollare</button>`;
 
     return `${scelte}${ignote}${letteCosi}${tagliate}
       ${l.ufficiale != null ? `<p class="nota">${l.mancanti
@@ -2456,7 +2521,10 @@ function vistaLetto() {
       ${main.length ? main.map(x => rigaLetta(x.k, x.qta, x.voci)).join("")
         : `<p class="vuoto">Niente nel Main.</p>`}
       ${extra.length ? `<div class="sezione"><h3>Extra Deck</h3><small>${r.extra} carte</small></div>`
-        + extra.map(x => rigaLetta(x.k, x.qta, x.voci)).join("") : ""}`;
+        + extra.map(x => rigaLetta(x.k, x.qta, x.voci)).join("") : ""}
+      ${r.tolte.length ? `<div class="sezione"><h3>Tolte</h3>
+          <small>${num(r.tolte.length)} ${plurale(r.tolte.length, "carta", "carte")}</small></div>`
+        + r.tolte.map(x => rigaLetta(x.k, 0, x.voci, true)).join("") : ""}`;
   };
   const u = STATO.lettura.ufficiale != null ? UFFICIALI[STATO.lettura.ufficiale] : null;
   return { titolo: u ? nomeUfficiale(u) : "Cosa ho letto", indietro: true, corpo };
@@ -2574,7 +2642,7 @@ function scheda(k) {
         ${esc(nomeLuogo(l))} · ${esc(dettaglioLuogoTesto(l))}</div>`).join("")}</div>
     ${m ? `<div class="scheda-mazzo"><span>In «${esc(m.nome)}»: <b class="copie-testo">${copie(m, c[N])} copie</b></span>
       ${controlloCopie(k, "largo")}</div>`
-      : MAZZI.length ? `<div class="scheda-mazzo"><select class="campo" id="selMazzo">
+      : MAZZI.length && STATO.schermata !== "letto" ? `<div class="scheda-mazzo"><select class="campo" id="selMazzo">
         <option value="">Aggiungi a un mazzo…</option>
         ${MAZZI.map(x => `<option value="${esc(x.id)}">${esc(x.nome)}</option>`).join("")}</select></div>` : ""}
     <button class="chiudi">Chiudi</button></div>`;
@@ -2699,7 +2767,12 @@ document.addEventListener("click", e => {
     tipiAttivi: new Set(), ritorno: STATO.schermata });
   if ((t = el("[data-g]"))) { STATO.gruppo = STATO.gruppo === t.dataset.g ? null : t.dataset.g; return ridisegnaCorpo(); }
   if ((t = el("[data-saga]"))) return impostaCursore(SAGHE[+t.dataset.saga].ultima);
-  if ((t = el("[data-tacca]"))) { if (t.dataset.tacca !== "") return impostaCursore(+t.dataset.tacca); return; }
+  if ((t = el("[data-tacca]"))) {
+    if (t.dataset.tacca === "") return;
+    /* scegliendo l'epoca a mano, il mazzo letto smette di spostarla da solo */
+    if (STATO.schermata === "letto") STATO.epocaAuto = false;
+    return impostaCursore(+t.dataset.tacca);
+  }
   if ((t = el("[data-mazzo]"))) return apriMazzo(t.dataset.mazzo);
   if ((t = el("[data-uff]"))) return apriUfficiale(+t.dataset.uff);
   if ((t = el("[data-nuovo]"))) {
@@ -2721,27 +2794,22 @@ document.addEventListener("click", e => {
   if ((t = el("[data-scelta]"))) {
     const [i, k] = t.dataset.scelta.split(":").map(Number);
     STATO.scelteLettura[i] = k;
-    return ridisegnaCorpo();
+    if (STATO.lettura && STATO.lettura.voci[i]) STATO.lettura.voci[i].tolta = false;
+    seguiEpoca();
+    return render();
   }
-  if ((t = el("[data-togli-voce]"))) {
-    /* una carta può venire da più righe della lista: si tolgono tutte, dalla
-       più in fondo, così gli indici di quelle prima restano buoni */
-    const indici = String(t.dataset.togliVoce).split(",").map(Number)
-      .filter(x => !isNaN(x)).sort((a, b) => b - a);
-    for (const i of indici) {
-      if (!STATO.lettura || !STATO.lettura.voci[i]) continue;
-      STATO.lettura.voci.splice(i, 1);
-      /* le scelte sono indicizzate sulle voci: vanno fatte scorrere anche loro */
-      const nuove = {};
-      for (const j in STATO.scelteLettura) {
-        const x = +j;
-        if (x < i) nuove[x] = STATO.scelteLettura[j];
-        else if (x > i) nuove[x - 1] = STATO.scelteLettura[j];
-      }
-      STATO.scelteLettura = nuove;
-    }
-    return ridisegnaCorpo();
+  if ((t = el("[data-togli-voce]")) || (t = el("[data-rimetti]"))) {
+    /* le voci non si cancellano: si barrano e si possono rimettere. Così gli
+       indici restano quelli (le scelte non scivolano) e la riga non sparisce
+       da sotto il dito portandosi dietro quella dopo. */
+    const tolta = t.dataset.togliVoce !== undefined;
+    const quali = String(tolta ? t.dataset.togliVoce : t.dataset.rimetti).split(",").map(Number);
+    for (const i of quali)
+      if (STATO.lettura && STATO.lettura.voci[i]) STATO.lettura.voci[i].tolta = tolta;
+    seguiEpoca();
+    return render();
   }
+
   if (!(t = el("[data-az]"))) return;
   const m = mazzoAperto();
   switch (t.dataset.az) {
