@@ -249,6 +249,23 @@ await T('quantità scritte in tutti i modi', async () => {
     ok(`${n} ×${q}`, r.nomi.includes(`${n}×${q}`), r.nomi.join(' · '));
 });
 
+await T('i casi limite misurati sull\'archivio', async () => {
+  await leggi('7\n3 7\n2 XX-Saber Faultroll\n3x Mask Change 2\n1x Lord of D.\n3 "A" Cell Breeding Device');
+  const r = await letto();
+  const atteso = ['7×3', 'XX-Saber Faultroll×2', 'Mask Change II×3', 'Lord of D.×1',
+    '"A" Cell Breeding Device×3'];
+  for (const a of atteso) ok(a.replace('×', ' ×'), r.nomi.includes(a), r.nomi.join(' · '));
+});
+
+await T('l\'unico nome che è inglese di una carta e italiano di un\'altra', async () => {
+  await leggi('1 Doppelganger');
+  const r = await letto();
+  ok('non sceglie da solo: chiede', r.scegliere === 1, `carte ${r.carte} · dubbie ${r.scegliere}`);
+  const scelte = await page.evaluate(() => STATO.lettura.voci[0].scelte.map(k => CARTE[k][0]));
+  ok('propone tutte e due', scelte.length === 2 && scelte.includes('Doppelganger') && scelte.includes('Mimicat'),
+     scelte.join(' · '));
+});
+
 console.log('\nerrori JS:', errori.length); errori.slice(0, 5).forEach(e => console.log('  !', e));
 falliti += errori.length;
 console.log(`\nPASSATI ${passati} · FALLITI ${falliti}`);

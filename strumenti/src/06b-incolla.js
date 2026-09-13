@@ -18,9 +18,16 @@
 const GRECHE = { "\u03b1": "alpha", "\u0391": "alpha", "\u03b2": "beta", "\u0392": "beta",
   "\u03b3": "gamma", "\u0393": "gamma", "\u03b4": "delta", "\u0394": "delta",
   "\u03c9": "omega", "\u03a9": "omega", "\u03a3": "sigma", "\u03c3": "sigma" };
+/* i numeri romani si piegano in cifre da tutte e due le parti: l'archivio
+   scrive «Mask Change II» e «XX-Saber», la gente scrive 2 e 20. Misurato:
+   non nasce nessuna collisione nuova. */
+const ROMANI = { ii: "2", iii: "3", iv: "4", v: "5", vi: "6", vii: "7", viii: "8",
+  ix: "9", x: "10", xi: "11", xii: "12", xx: "20" };
 const senzaSegni = s => senzaAccenti(String(s)).toLowerCase()
   .replace(/[\u0391-\u03c9]/g, c => GRECHE[c] || c)
-  .replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "");
+  .replace(/&/g, " and ")
+  .replace(/\b(ii|iii|iv|v|vi|vii|viii|ix|x|xi|xii|xx)\b/g, r => ROMANI[r])
+  .replace(/[^a-z0-9]+/g, "");
 let IT_ESATTO = null, NORM_EN = null, NORM_IT = null, PER_ID = null;
 let NOMI_PIATTI = null;
 function indiciNomi() {
@@ -120,8 +127,13 @@ function riconosciEsatto(testo, perSuggerimenti) {
   indiciNomi();
   const basso = t.toLowerCase();
   const k1 = PER_NOME.get(basso);                       // nome inglese esatto
-  if (k1 !== undefined) return { stato: "ok", k: k1 };
   const k2 = IT_ESATTO.get(basso);                      // nome italiano ufficiale
+  /* capita una volta sola in tutto l'archivio — «Doppelganger» è una carta
+     inglese ED è il nome italiano di un'altra — e lì si chiede, invece di far
+     vincere l'inglese per decreto e sbagliare in silenzio */
+  if (k1 !== undefined && k2 !== undefined && k1 !== k2)
+    return { stato: "scelta", scelte: [k1, k2] };
+  if (k1 !== undefined) return { stato: "ok", k: k1 };
   if (k2 !== undefined) return { stato: "ok", k: k2 };
   const n = senzaSegni(t);                              // senza trattini, accenti, apostrofi
   if (!n) return { stato: "ignota", scelte: [] };
@@ -189,7 +201,11 @@ const NUMERI_IT = { una: 1, uno: 1, un: 1, due: 2, tre: 3 };
    solo se è staccato da una tabulazione o da più spazi. */
 function staccaQuantita(t) {
   let m;
-  if ((m = t.match(/^(\d{1,2})\s*[x×*]\s*(.+)$/i))) return [+m[1], m[2]];
+  /* la «x» del moltiplicatore o sta attaccata al numero («3x Nome») o ha uno
+     spazio dopo («3 x Nome»): senza questa distinzione «2 XX-Saber Faultroll»
+     diventava due copie di «X-Saber Faultroll», che è un'altra carta */
+  if ((m = t.match(/^(\d{1,2})[x×*]\s*(.+)$/i))) return [+m[1], m[2]];
+  if ((m = t.match(/^(\d{1,2})\s*[x×*]\s+(.+)$/i))) return [+m[1], m[2]];
   if ((m = t.match(/^[x×]\s*(\d{1,2})[\s.:-]+(.+)$/i))) return [+m[1], m[2]];
   if ((m = t.match(/^(\d{1,2})\s+(?:copie|copia|volte)\s+(?:di\s+)?(.+)$/i))) return [+m[1], m[2]];
   if ((m = t.match(/^(una|uno|un|due|tre)\s+(?:copie|copia)\s+di\s+(.+)$/i))) return [NUMERI_IT[m[1].toLowerCase()], m[2]];
@@ -209,7 +225,11 @@ function staccaQuantita(t) {
    non esiste — «Destiny HERO - Dominance» non va toccata. */
 function varianti(t) {
   const out = [t];
-  let x = t;
+  /* nessuno dei 10.026 nomi contiene una parentesi: quello che sta fra parentesi
+     è sempre roba aggiunta da chi ha scritto la lista */
+  const senzaParentesi = t.replace(/\s*[([][^)\]]*[)\]]\s*/g, " ").replace(/\s+/g, " ").trim();
+  if (senzaParentesi && senzaParentesi !== t) out.push(senzaParentesi);
+  let x = out[out.length - 1];
   for (let i = 0; i < 3; i++) {
     const y = x.replace(/\s*[([][^)\]]*[)\]]\s*$/, "")
       .replace(/\s+[-–—]\s+[A-Za-zÀ-ÿ ]{3,20}$/, "").trim();
@@ -281,13 +301,14 @@ function leggiLista(testo) {
     if (PARE_INDIRIZZO.test(r)) { saltate++; continue; }
     const dentroSide = x => { if (SEZIONE_SIDE.test(x)) nelSide = true; else if (SEZIONE_DENTRO.test(x)) nelSide = false; };
     if (SEZIONE.test(r)) { dentroSide(r); saltate++; continue; }
-    /* righe senza nemmeno una lettera: righelli, conteggi, numeri sparsi.
-       I codici dei .ydk passano di qui dentro perché sono 6-9 cifre. */
-    if (!/[a-z]/i.test(r) && !/^\d{6,9}$/.test(r)) { saltate++; continue; }
-
     /* la riga intera è già una carta? allora non si spezza e non si interpreta:
        «Adreus, Keeper of Armageddon» e «Pot of Greed» finiscono qui */
     const intero = riconosciEsatto(r);
+    /* righe senza nemmeno una lettera: righelli, conteggi, numeri sparsi. Si
+       scartano DOPO aver provato il nome, perché esiste una carta che si chiama
+       «7», e dopo aver provato a staccare la quantità, perché «3 7» sono tre. */
+    if (intero.stato !== "ok" && !/[a-z]/i.test(r) && !/^\d{6,9}$/.test(r)
+        && riconosciEsatto(staccaQuantita(r)[1].trim()).stato !== "ok") { saltate++; continue; }
     if (intero.stato !== "ok" && soloParoleDiSezione(r)) { dentroSide(r); saltate++; continue; }
     /* il titolo in cima («Mazzo Exodia — lista di Marti») dà il nome al mazzo */
     if (intero.stato !== "ok" && nome === null && !voci.length
