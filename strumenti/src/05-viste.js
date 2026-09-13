@@ -69,12 +69,34 @@ const SUFFISSI = ["issimi", "issime", "issimo", "issima", "mente", "zioni", "zio
   "ato", "ata", "ati", "ate", "ore", "ori", "ice", "ici", "oso", "osa", "osi", "ose"];
 function radice(p) {
   for (const s of SUFFISSI)
-    if (p.length - s.length >= 4 && p.endsWith(s)) return p.slice(0, p.length - s.length);
-  /* poi la vocale finale: lega "eroi" a "eroe", "nera" a "nero" */
-  if (p.length >= 4 && "aeio".includes(p[p.length - 1])) return p.slice(0, -1);
+    if (p.length - s.length >= 4 && p.endsWith(s)) { p = p.slice(0, p.length - s.length); break; }
+  /* poi le vocali finali, una dopo l'altra: lega "eroi" a "eroe", "nera" a "nero"
+     e "occhio" a "occhi", che altrimenti si fermerebbero a radici diverse */
+  while (p.length >= 4 && "aeio".includes(p[p.length - 1])) p = p.slice(0, -1);
+  /* l'h dei plurali duri: "draghi"→"dragh" deve tornare al "drag" di "drago",
+     come "bianche"→"bianch"→"bianc". Senza questo, «draghi bianchi» non
+     trovava niente mentre «drago bianco» trovava quattordici carte. */
+  if (p.length >= 4 && p.endsWith("h") && "cg".includes(p[p.length - 2])) p = p.slice(0, -1);
+  /* il femminile in -trice contro il maschile in -tore: "incantatr"→"incantat" */
+  if (p.length >= 4 && p.endsWith("tr")) p = p.slice(0, -1);
   return p;
 }
 const radici = testo => spezza(testo).map(radice);
+
+/* Articoli e preposizioni non devono valere come vincoli: il campo invita a
+   scrivere liberamente, e «il drago bianco» deve trovare quello che trova
+   «drago bianco». Restano però utilizzabili da sole, se uno cerca proprio
+   quella parola: si scartano solo quando resta qualcos'altro. */
+const VUOTE = new Set(["il", "lo", "la", "i", "gli", "le", "un", "uno", "una", "l",
+  "di", "del", "dello", "della", "dei", "degli", "delle", "da", "dal", "dallo",
+  "dalla", "dai", "dagli", "dalle", "in", "nel", "nello", "nella", "nei", "negli",
+  "nelle", "con", "col", "su", "sul", "sulla", "per", "tra", "fra", "e", "ed",
+  "a", "ad", "al", "allo", "alla", "ai", "agli", "alle", "che", "chi", "non",
+  "carta", "carte", "tipo"].map(radice));
+const utili = rad => {
+  const r = rad.filter(x => x.length > 2 && !VUOTE.has(x));
+  return r.length ? r : rad;
+};
 
 /* Due impronte per carta: una col solo nome (decide l'ordine) e una completa.
    Si costruiscono alla prima ricerca, non all'avvio: aprire l'app resta immediato. */
@@ -100,8 +122,11 @@ function costruisciImpronte() {
 const corrisponde = (impronta, rad) => rad.every(r => impronta.includes(" " + r));
 
 function cerca(chiavi, testo) {
-  const rad = radici(testo);
-  if (!rad.length) return chiavi;
+  const tutte = radici(testo);
+  /* campo vuoto è un conto, «...» è un altro: una ricerca fatta di sola
+     punteggiatura non deve spacciare l'archivio intero per risultati */
+  if (!tutte.length) return testo.trim() ? [] : chiavi;
+  const rad = utili(tutte);
   costruisciImpronte();
   const perNome = [], perAltro = [];
   for (const k of chiavi) {
@@ -125,21 +150,23 @@ const TETTI = { archetipo: 150, servono: 100, usano: 50 };
 function espandi(trovate) {
   if (!trovate.length) return { archetipo: [], servono: [], usano: [] };
   const gia = new Set(trovate);
-  const arch = new Set(), servono = new Map(), usano = new Map();
+  const arch = new Map(), servono = new Map(), usano = new Map();
   for (const k of trovate) {
     const c = CARTE[k];
-    if (c[AR] >= 0) for (const j of (PER_ARCHETIPO.get(c[AR]) || [])) if (!gia.has(j)) arch.add(j);
+    /* si conta da quante carte trovate arriva ciascun compagno: davanti finisce
+       l'archetipo più presente nella ricerca, non la lettera A */
+    if (c[AR] >= 0) for (const j of (PER_ARCHETIPO.get(c[AR]) || [])) if (!gia.has(j)) arch.set(j, (arch.get(j) || 0) + 1);
     for (const j of c[CITA]) if (!gia.has(j)) servono.set(j, (servono.get(j) || 0) + 1);
     for (const j of (CITATO_DA.get(k) || [])) if (!gia.has(j)) usano.set(j, (usano.get(j) || 0) + 1);
   }
   /* il gruppo più stretto vince: chi è già nell'archetipo non ricompare sotto */
-  for (const j of arch) { servono.delete(j); usano.delete(j); }
+  for (const j of arch.keys()) { servono.delete(j); usano.delete(j); }
   for (const j of servono.keys()) usano.delete(j);
   const perNome = (a, b) => nomeIt(CARTE[a]).localeCompare(nomeIt(CARTE[b]));
   /* le più nominate per prime: è così che Polimerizzazione emerge fra gli Eroi */
   const perQuante = m => [...m.entries()]
     .sort((a, b) => b[1] - a[1] || perNome(a[0], b[0])).map(x => x[0]);
-  return { archetipo: [...arch].sort(perNome), servono: perQuante(servono), usano: perQuante(usano) };
+  return { archetipo: perQuante(arch), servono: perQuante(servono), usano: perQuante(usano) };
 }
 
 /* Quante piastrelle si disegnano.
@@ -152,7 +179,11 @@ function espandi(trovate) {
    il fondo si veda. */
 const PRIMO = 300, BLOCCO = 300;
 const CHIAVI = {}, LIMITI = {};
-const azzeraLimiti = () => { for (const k in LIMITI) delete LIMITI[k]; };
+/* chi azzera i limiti sta rifacendo l'elenco da capo: chi ridisegna lo deve
+   sapere, per non lasciare l'utente appiccicato alla fine del vecchio blocco */
+let LIMITI_AZZERATI = false;
+const azzeraLimiti = () => { for (const k in LIMITI) delete LIMITI[k]; LIMITI_AZZERATI = true; };
+const consumaAzzeramento = () => { const a = LIMITI_AZZERATI; LIMITI_AZZERATI = false; return a; };
 const limiteDi = (id, n) => Math.min(LIMITI[id] > 0 ? LIMITI[id] : PRIMO, n);
 
 /* Raggiunto un limite cambia solo la disponibilità dei "+": si aggiornano i
@@ -191,7 +222,11 @@ function coda(id) {
   return `<div class="sentinella" data-altre="${id}">
     <span>altre ${num(chiavi.length - limite)} carte…</span></div>`;
 }
-/* accoda senza ricostruire quelle già a schermo */
+/* accoda senza ricostruire quelle già a schermo.
+   Se il punto di innesto sta SOPRA la finestra (si è saltati in fondo, o si è
+   seguito un collegamento), le piastrelle nuove sposterebbero in giù tutto
+   quello che si sta guardando: si recupera la stessa quantità di scorrimento,
+   così sotto gli occhi resta la stessa carta. */
 let accodaInCorso = false;
 function accodaCarte(id) {
   const griglia = document.getElementById(id), chiavi = CHIAVI[id] || [];
@@ -202,32 +237,99 @@ function accodaCarte(id) {
   if (prima >= chiavi.length) return true;
   const dopo = Math.min(chiavi.length, prima + BLOCCO);
   LIMITI[id] = dopo;
+  const sopra = griglia.getBoundingClientRect().bottom < 0;
+  const altezzaPrima = document.documentElement.scrollHeight;
   griglia.insertAdjacentHTML("beforeend", chiavi.slice(prima, dopo).map(cartaHTML).join(""));
   const s = document.querySelector(`.sentinella[data-altre="${id}"]`);
   if (s) { s.outerHTML = coda(id); osserva(); }
+  if (sopra) {
+    const cresciuta = document.documentElement.scrollHeight - altezzaPrima;
+    if (cresciuta > 0) scrollTo(0, scrollY + cresciuta);
+  }
+  riancora();
   return true;
 }
+
+/* Seguire un collegamento interno e restare dove si è atterrati.
+   Il salto «↓ altre N che ci vanno insieme» atterra appena sotto una griglia
+   che può ancora crescere: senza queste due precauzioni la griglia di sopra si
+   allungava di trecento piastrelle e spingeva la sezione trenta schermate più
+   giù, lasciando l'utente in mezzo alle carte di prima.
+   1) le griglie che stanno sopra il punto d'arrivo smettono di accodare da sole;
+   2) se qualcosa cresce lo stesso, si torna sul bersaglio.
+   Al primo gesto dell'utente tutto ricomincia a funzionare come sempre. */
+const SOSPESE = new Set();
+let BERSAGLIO = null, scadenzaBersaglio = 0;
+function riancora() {
+  if (!BERSAGLIO) return;
+  if (Date.now() > scadenzaBersaglio) { BERSAGLIO = null; return; }
+  const el = document.getElementById(BERSAGLIO);
+  if (el) el.scrollIntoView();
+}
+function vaiAncora(id) {
+  const el = document.getElementById(id);
+  if (!el) return false;
+  const y = el.getBoundingClientRect().top;
+  SOSPESE.clear();
+  for (const s of document.querySelectorAll(".sentinella"))
+    if (s.getBoundingClientRect().top < y) SOSPESE.add(s.dataset.altre);
+  BERSAGLIO = id;
+  scadenzaBersaglio = Date.now() + 3000;
+  el.scrollIntoView();
+  return true;
+}
+function liberaSentinelle() {
+  BERSAGLIO = null;
+  if (!SOSPESE.size) return;
+  SOSPESE.clear();
+  valutaSentinelle();
+}
+
 /* Le carte compaiono da sole arrivando in fondo. Se il browser non sa farlo,
    la sentinella resta toccabile e funziona come un pulsante. */
 let OSSERVATORE = null;
 function osserva() {
   if (typeof IntersectionObserver !== "function") return;
   if (!OSSERVATORE) OSSERVATORE = new IntersectionObserver(voci => {
-    for (const v of voci) if (v.isIntersecting) accodaCarte(v.target.dataset.altre);
+    for (const v of voci)
+      if (v.isIntersecting && !SOSPESE.has(v.target.dataset.altre)) accodaCarte(v.target.dataset.altre);
   }, { rootMargin: "1200px" });
   OSSERVATORE.disconnect();
   document.querySelectorAll(".sentinella").forEach(s => OSSERVATORE.observe(s));
 }
+/* L'osservatore da solo non basta: saltando di colpo in fondo (barra di
+   scorrimento, tasto Fine, flick sul telefono) la sentinella passa da "sotto la
+   finestra" a "sopra la finestra" senza mai attraversarla, e non scatta niente.
+   Questo controllo, legato allo scorrimento, la ripesca. */
+let attesaValuta = false;
+function valutaSentinelle() {
+  if (attesaValuta) return;
+  attesaValuta = true;
+  requestAnimationFrame(() => {
+    attesaValuta = false;
+    for (const s of document.querySelectorAll(".sentinella")) {
+      if (SOSPESE.has(s.dataset.altre)) continue;
+      if (s.getBoundingClientRect().top < innerHeight + 1200) { accodaCarte(s.dataset.altre); break; }
+    }
+  });
+}
+addEventListener("scroll", valutaSentinelle, { passive: true });
+for (const gesto of ["wheel", "touchstart", "keydown", "mousedown"])
+  addEventListener(gesto, liberaSentinelle, { passive: true });
 
 const ordinaCarte = (chiavi) => STATO.ordine === "epoca"
   ? chiavi.slice().sort((a, b) => CARTE[a][T] - CARTE[b][T] || CARTE[a][N].localeCompare(CARTE[b][N]))
   : chiavi;
 
-/* chip delle cornici presenti in una lista */
+/* chip delle cornici presenti in una lista.
+   Un chip acceso si disegna sempre, anche se nessuna carta di questo elenco ha
+   quella cornice: è lui a tenere l'elenco vuoto, e deve restare visibile per
+   poter essere spento. Nasconderlo lasciava un filtro invisibile e inamovibile. */
 function chipCornici(chiavi) {
-  const presenti = [...new Set(chiavi.map(k => cornice(CARTE[k])))].filter(Boolean)
+  const presenti = [...new Set([...chiavi.map(k => cornice(CARTE[k])), ...STATO.tipiAttivi])]
+    .filter(Boolean)
     .sort((a, b) => (CORNICE[a] ? CORNICE[a][0] : a).localeCompare(CORNICE[b] ? CORNICE[b][0] : b));
-  if (presenti.length < 2) return "";
+  if (presenti.length < 2 && !STATO.tipiAttivi.size) return "";
   return `<div class="filtri">${presenti.map(t =>
     `<button class="f" data-t="${esc(t)}" aria-pressed="${STATO.tipiAttivi.has(t)}">
       <i class="pallino" style="background:${CORNICE[t] ? CORNICE[t][1] : "#777"}"></i>${esc(CORNICE[t] ? CORNICE[t][0] : t)}</button>`).join("")}</div>`;
@@ -347,39 +449,55 @@ function sezioniRicerca(base, testo, dentroFn, idPre) {
   }).filter(x => x.carte.length);
   const insieme = gruppi.reduce((a, x) => a + x.carte.length, 0);
 
-  if (!trovate.length && !insieme) {
+  /* Lo stato vuoto della PRIMA sezione si scrive sempre, anche quando sotto ci
+     sono carte collegate: altrimenti sparivano insieme il titolo, il conto
+     «0 nella tua epoca · N fuori» e l'unica via d'uscita, e restavano a schermo
+     solo dei compagni senza più nessuna riga che dicesse da dove venivano. */
+  const vuotoTrovate = () => {
     /* dentro un mazzo l'epoca è sua e non si sposta per sbaglio: lì si accendono
        le carte fuori epoca, non si allarga il mazzo */
     const uscita = mazzoAperto()
       ? `<button class="azione second" data-az="fuori">Mostra anche le carte fuori dalla tua epoca</button>`
       : `<button class="azione second" data-az="tutto">Guardale comunque</button>`;
-    return { conta: 0, html: chipCornici(base) + (fuori
-      ? `<p class="vuoto">0 nella tua epoca · ${num(fuori)} fuori<br>${uscita}</p>`
-      : `<p class="vuoto">Nessuna carta per «${q}».<br>
+    const togli = STATO.tipiAttivi.size
+      ? `<br><button class="azione second" data-az="senza-tipi">Togli il filtro per tipo</button>` : "";
+    return fuori
+      ? `<p class="vuoto">Carte «${q}» · 0 nella tua epoca · ${num(fuori)} fuori<br>${uscita}${togli}</p>`
+      : `<p class="vuoto">Nessuna carta per «${q}».${togli}<br>
           Prova con il nome italiano, un tipo o un archetipo:
-          drago bianco, zombie, eroi elementari, macchina.</p>`) };
-  }
+          drago bianco, zombie, eroi elementari, macchina.</p>`;
+  };
+
+  if (!trovate.length && !insieme)
+    return { conta: 0, html: `<span id="su"></span>` + chipCornici(base) + vuotoTrovate() };
 
   const salta = trovate.length >= SALTO_DA && insieme > 0;
-  let html = chipCornici(base);
+  let html = `<span id="su"></span>` + chipCornici(base);
   if (trovate.length) {
     html += `<p class="serie riga-serie"><span>Carte «${q}» · ${num(trovate.length)}</span>
       ${salta ? `<a class="chip" href="#insieme">↓ altre ${num(insieme)} che ci vanno insieme</a>` : ""}</p>`
       + grigliaCarte(ordinaCarte(trovate), "", idPre + "trovate");
+  } else {
+    html += vuotoTrovate();
   }
   if (insieme) {
     html += `<div class="gruppo" id="insieme"><h3>Altre ${num(insieme)} che ci vanno insieme</h3></div>
-      <p class="spiega">Non si chiamano così, ma si giocano con quelle qui sopra${
+      <p class="spiega">Non si chiamano così, ma si giocano con ${trovate.length
+        ? "quelle qui sopra" : `le carte «${q}»`}${
         gruppi.length === 1 ? ": " + esc(gruppi[0].spiega) : ""}.</p>
       ${salta ? `<p class="serie"><a class="chip" href="#su">↑ Torna alle ${num(trovate.length)} «${q}»</a></p>` : ""}`;
     for (const x of gruppi) {
       if (gruppi.length > 1) html += `<p class="serie">${esc(x.et)} · ${num(x.carte.length)}</p>`;
       if (x.carte.length < x.disponibili)
-        html += `<p class="spiega">Le più usate: ${num(x.carte.length)} di ${num(x.disponibili)}.</p>`;
+        html += `<p class="spiega">${x.k === "archetipo"
+          ? `${num(x.carte.length)} di ${num(x.disponibili)}, dagli archetipi più presenti fra le trovate.`
+          : `Le più usate: ${num(x.carte.length)} di ${num(x.disponibili)}.`}</p>`;
       html += grigliaCarte(x.carte, "", idPre + x.k);
     }
   }
-  return { conta: trovate.length + insieme, html };
+  /* il numero in cima conta le carte cercate: le compagne sono un di più,
+     e annunciarle come «trovate» sarebbe una bugia quando trovate è zero */
+  return { conta: trovate.length, html };
 }
 
 function vistaCarte() {
@@ -399,7 +517,7 @@ function vistaCarte() {
     }
     const r = sezioniRicerca(base, testo, dentro, "c");
     ULTIMA_CONTA = r.conta;
-    return `<span id="su"></span>` + r.html;
+    return r.html;
   };
   return {
     titolo: "Tutte le carte",

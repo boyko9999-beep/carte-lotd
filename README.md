@@ -16,7 +16,9 @@ quante sono rare, e da quali epoche vengono (la barra colorata in testa alla bus
 ufficiale, quindi si cerca come si parla: *drago bianco occhi blu*, *zombie*,
 *eroi elementari*. Le parole sono ridotte alla radice, così «eroi elementari»
 trova gli «EROE Elementale» e «zombie» trova tutta la razza Zombie, non solo chi
-ha Zombie nel nome.
+ha Zombie nel nome. Singolare e plurale danno lo stesso risultato — anche quelli
+duri, *drago*/*draghi*, *antico*/*antichi* — e articoli e preposizioni non
+contano: «il drago bianco» trova quello che trova «drago bianco».
 
 Sotto le carte trovate compare un secondo elenco, **«che ci vanno insieme»**:
 stesso archetipo, carte nominate nel testo di quelle trovate, e carte che le
@@ -118,8 +120,10 @@ node strumenti/prova4.mjs   # scroll, epoca dei mazzi, cancellazioni, carte fuor
 node strumenti/prova5.mjs   # reattività: avvio, griglia che cresce, ricerca, limiti
 node strumenti/prova6.mjs   # nomi ostili: virgolette, barre, HTML nei nomi dei mazzi
 node strumenti/prova8-ricerca.mjs  # ricerca per tema e riempimento della griglia
+node strumenti/prova9-revisione.mjs # i difetti trovati dalla revisione: plurali,
+                                    # articoli, salti fra le sezioni, stato vuoto
 ```
 
-196 controlli su un Chromium headless. La prova 5 misura anche i tempi: avvio
+231 controlli su un Chromium headless. La prova 5 misura anche i tempi: avvio
 sotto i 200 ms, ricerca su 10.026 carte sotto il mezzo secondo, e il pulsante
 «Mostra altre carte» che non rallenta man mano che la griglia cresce.

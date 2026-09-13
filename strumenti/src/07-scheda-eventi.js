@@ -100,6 +100,14 @@ document.addEventListener("click", e => {
   const el = s => e.target.closest(s);
   let t;
 
+  /* i salti fra le due sezioni dei risultati se li gestisce l'app: l'ancora
+     nativa atterrava e poi la griglia di sopra cresceva e portava via la pagina */
+  if ((t = el('a[href^="#"]'))) {
+    e.preventDefault();
+    vaiAncora(t.getAttribute("href").slice(1));
+    return;
+  }
+
   /* Raggiunto un limite, TUTTI i "+" a schermo vanno disattivati, non solo
      quello toccato: altrimenti restano accesi e non fanno niente. */
   const pieno = m => m ? (conta(m, false) >= 60) + "|" + (conta(m, true) >= 15) : "";
@@ -108,9 +116,12 @@ document.addEventListener("click", e => {
      che è corto. Nel selettore, con mille piastrelle, si aggiorna solo quel che
      serve. */
   const dopoModifica = (k, cambioPieno) => {
-    if (STATO.schermata === "mazzo") { ridisegnaCorpo(); return; }
+    if (STATO.schermata === "mazzo") ridisegnaCorpo();
+    else if (cambioPieno) aggiornaDisponibilita();
+    /* per ultimo, e sempre: la scheda della carta vive fuori da #corpo, quindi
+       il ridisegno non la tocca e restava ferma su "1 copie" mentre il mazzo
+       cambiava davvero, col "+" acceso anche oltre la terza copia */
     aggiornaControllo(k);
-    if (cambioPieno) aggiornaDisponibilita();
   };
   if ((t = el("[data-piu]"))) {
     const k = +t.dataset.piu, m = mazzoAperto();
@@ -169,6 +180,7 @@ document.addEventListener("click", e => {
       if (!m && STATO.cursore < ULTIMA) return impostaCursore(ULTIMA);
       return render();
     case "solo-nuove": STATO.soloNuove = !STATO.soloNuove; azzeraLimiti(); return render();
+    case "senza-tipi": STATO.tipiAttivi = new Set(); azzeraLimiti(); return ridisegnaCorpo();
 
     case "ordine": STATO.ordine = STATO.ordine === "epoca" ? "nome" : "epoca"; azzeraLimiti(); return ridisegnaCorpo();
     case "nascondi": STATO.nascondiFuori = !STATO.nascondiFuori; azzeraLimiti(); return ridisegnaCorpo();

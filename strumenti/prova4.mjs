@@ -32,17 +32,31 @@ await T('lo scroll non sopravvive al cambio di schermata', async () => {
   ok('la testata è visibile', (await txt('.testa h2')).includes('Playmaker'));
 });
 
-await T('cambiare epoca non fa saltare la pagina', async () => {
+/* Cambiare epoca rifà l'elenco: o si resta sulla stessa carta, o si riparte
+   dall'alto del nuovo elenco. Quel che non deve succedere è ritrovarsi in un
+   punto qualsiasi, con carte diverse sotto gli occhi e la pagina che si allunga
+   da sola perché la coda del primo blocco è finita dentro la finestra. */
+await T('cambiare epoca non lascia in un punto qualsiasi', async () => {
   await vaiTab('buste');
   await page.evaluate(() => [...document.querySelectorAll('.duel')]
     .find(x => x.querySelector('.nome').textContent === 'Yugi').click());
   await page.waitForSelector('.testa');
   await page.evaluate(() => scrollTo(0, 1500)); await page.waitForTimeout(150);
-  const prima = await page.evaluate(() => scrollY);
+  const prima = await page.evaluate(() => {
+    const t = [...document.querySelectorAll('#corpo [data-c]')]
+      .find(x => x.getBoundingClientRect().bottom > 120);
+    return { y: scrollY, c: t && t.dataset.c, top: t && t.getBoundingClientRect().top };
+  });
+  ok('si stava guardando una carta', prima.c != null, JSON.stringify(prima));
   await pannello(true);
   await page.click('[data-saga="4"]'); await page.waitForTimeout(300);   // ARC-V: la busta resta lunga
-  const dopo = await page.evaluate(() => scrollY);
-  ok('si resta più o meno dove si era', Math.abs(dopo - prima) < 300, `${prima} -> ${dopo}`);
+  const dopo = await page.evaluate(c => {
+    const t = c != null && document.querySelector(`#corpo [data-c="${c}"]`);
+    return { y: scrollY, top: t ? t.getBoundingClientRect().top : null };
+  }, prima.c);
+  ok('stessa carta sotto gli occhi, oppure in cima al nuovo elenco',
+    dopo.y === 0 || (dopo.top !== null && Math.abs(dopo.top - prima.top) < 40),
+    JSON.stringify({ prima, dopo }));
   await pannello(false);
 });
 

@@ -86,24 +86,52 @@ const barraTab = () => `<div class="tabs">
 let CORPO = () => "";
 
 let ultimaSchermata = "";
+/* Quale carta si sta guardando, non a che altezza si è: la stima di ingombro
+   delle piastrelle non disegnate non è esatta al pixel, e ripristinare il solo
+   scrollY faceva slittare l'elenco di qualche riga. */
+function ancoraVisibile() {
+  for (const t of document.querySelectorAll("#corpo [data-c]")) {
+    const r = t.getBoundingClientRect();
+    if (r.bottom > 120) return { c: t.dataset.c, y: r.top };
+  }
+  return null;
+}
+function riportaAncora(a) {
+  if (!a) return false;
+  const t = document.querySelector(`#corpo [data-c="${a.c}"]`);
+  if (!t) return false;
+  const d = t.getBoundingClientRect().top - a.y;
+  if (d) scrollTo(0, scrollY + d);
+  return true;
+}
 function render() {
-  const y = scrollY;
+  const y = scrollY, ancora = ancoraVisibile();
   clearTimeout(attesaRicerca);      // niente ricerche in volo che atterrano sulla schermata dopo
   const chiave = [STATO.schermata, STATO.vista, STATO.luogo, STATO.mazzo].join("|");
+  const azzerato = consumaAzzeramento();
   const v = schermataCorrente();
   CORPO = v.corpo;
   app.innerHTML = intestazione(v.titolo, v.conta, v.indietro) +
     `<div class="wrap">${v.testa || ""}
       <div id="corpo">${CORPO()}</div></div>`;
+  /* il numero in cima è calcolato mentre si disegna il corpo: senza questo
+     resterebbe quello della schermata precedente */
+  aggiornaConta();
   aggiornaPiede();
   osserva();
-  /* si resta dove si era solo se la schermata è la stessa (cambio epoca,
-     apertura del pannello); cambiando schermata si parte dall'alto */
-  scrollTo(0, chiave === ultimaSchermata ? y : 0);
+  /* Cambiando schermata si parte dall'alto. Restando sulla stessa si resta
+     sulla carta che si stava guardando, se c'è ancora; se l'elenco è stato
+     rifatto da capo (cambio epoca, filtri tolti) e quella carta non c'è più si
+     riparte dall'alto, perché è un elenco nuovo e il vecchio pixel non vuol
+     dire più niente: prima ci si ritrovava appiccicati alla fine del primo
+     blocco, in un punto qualsiasi, e la pagina si allungava da sola. */
+  if (chiave !== ultimaSchermata) scrollTo(0, 0);
+  else if (!riportaAncora(ancora)) scrollTo(0, azzerato ? 0 : y);
   ultimaSchermata = chiave;
 }
 function ridisegnaCorpo() {
   const el = document.getElementById("corpo");
+  consumaAzzeramento();
   if (el) el.innerHTML = CORPO();
   aggiornaConta();
   aggiornaPiede();
