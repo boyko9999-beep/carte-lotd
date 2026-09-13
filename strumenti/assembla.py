@@ -10,7 +10,7 @@ dati = open(os.path.join(QUI, "indice.json"), encoding="utf-8").read()
 dati = dati.replace("<", "\\u003c").replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
 
 codice = ["02-modello.js", "03-aiuti.js", "04-guscio.js", "05-viste.js",
-          "06-mazzi.js", "07-scheda-eventi.js"]
+          "06-mazzi.js", "06b-incolla.js", "07-scheda-eventi.js"]
 
 out = io.StringIO()
 out.write(open(os.path.join(SRC, "01-head.html"), encoding="utf-8").read())

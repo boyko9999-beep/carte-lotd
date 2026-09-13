@@ -39,6 +39,16 @@ stai giocando. Niente sparisce mai dall'elenco: le buste a zero restano, spente.
 raggruppati per campagna del gioco. Le carte dei duelli si vincono una volta sola,
 le buste si ricomprano: per questo i duelli vengono prima.
 
+**Incolla una lista** — dalla scheda *Mazzi*: incolli il testo di una deck list
+(quella sotto un video, quella di un sito, un file `.ydk`, o un mazzo esportato da
+qui) e l'app costruisce il mazzo. Legge le quantità in tutte le forme in cui si
+scrivono (`3x Nome`, `Nome x3`, `3 Nome`, codici `.ydk`), salta intestazioni e
+conteggi, riconosce i nomi inglesi e quelli italiani ufficiali, e ricompone le
+abbreviazioni con la coda condivisa (`1x Left Arm / 1x Right Leg of the Forbidden
+One`). Prima di creare mostra cosa ha capito: cosa non ha riconosciuto (con i
+suggerimenti da toccare), quali copie ha portato a 3, e **in quale epoca il mazzo
+diventa giocabile** — la più stretta in cui ci sta tutto.
+
 **Mazzi (ricette)** — un mazzo nasce dentro un'epoca. Aprendolo, tutta l'app si
 allinea a quell'epoca e puoi pescare solo dalle carte che esistevano allora.
 Main ed Extra Deck sono dedotti dal tipo di carta, il limite di 3 copie e le
@@ -122,8 +132,9 @@ node strumenti/prova6.mjs   # nomi ostili: virgolette, barre, HTML nei nomi dei 
 node strumenti/prova8-ricerca.mjs  # ricerca per tema e riempimento della griglia
 node strumenti/prova9-revisione.mjs # i difetti trovati dalla revisione: plurali,
                                     # articoli, salti fra le sezioni, stato vuoto
+node strumenti/prova10-incolla.mjs  # lista incollata: lettura, nomi, epoca, creazione
 ```
 
-231 controlli su un Chromium headless. La prova 5 misura anche i tempi: avvio
+264 controlli su un Chromium headless. La prova 5 misura anche i tempi: avvio
 sotto i 200 ms, ricerca su 10.026 carte sotto il mezzo secondo, e il pulsante
 «Mostra altre carte» che non rallenta man mano che la griglia cresce.

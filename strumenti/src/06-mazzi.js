@@ -45,7 +45,8 @@ function vistaMazzi() {
         `<button class="duel" data-nuovo="${c}">
           <div class="saga-t" style="background:${coloreTacca(c)}">＋</div>
           <span><span class="nome">${esc(t)}</span>
-          <small>${num(CUM[c])} carte fra cui scegliere</small></span></button>`).join("")}</div>`;
+          <small>${num(CUM[c])} carte fra cui scegliere</small></span></button>`).join("")}</div>
+      <button class="azione second" data-az="incolla">⇩ Incolla una lista che hai già</button>`;
     return `<div class="duellanti">${MAZZI.slice().sort((a, b) => b.modificato - a.modificato)
       .map(m => {
         const [cl, testo] = semaforo(m), fuori = fuoriEpoca(m).length;
@@ -56,7 +57,10 @@ function vistaMazzi() {
           <small>${esc(etichettaCursore(m.cursore))} · Main ${conta(m, false)} · Extra ${conta(m, true)}</small>
           <small class="${cl}">${esc(testo)}${fuori ? ` · ${fuori} fuori epoca` : ""}</small></span></button>`;
       }).join("")}</div>
-      <button class="azione" data-nuovo="${STATO.cursore}">＋ Nuovo mazzo</button>
+      <div class="duo">
+        <button class="azione" data-nuovo="${STATO.cursore}">＋ Nuovo mazzo</button>
+        <button class="azione second" data-az="incolla">⇩ Incolla una lista</button>
+      </div>
       <p class="nota">I mazzi restano dentro questo browser: se pulisci i dati spariscono.
         Copiali per tenerli al sicuro.</p>`;
   };

@@ -72,6 +72,8 @@ function schermataCorrente() {
     case "scegli": return vistaSelettore();
     case "spesa": return vistaSpesa();
     case "esporta": return vistaEsporta();
+    case "incolla": return vistaIncolla();
+    case "letto": return vistaLetto();
   }
   const v = STATO.vista === "carte" ? vistaCarte()
     : STATO.vista === "dove" ? vistaDove()
@@ -89,6 +91,9 @@ function indietro() {
     case "scegli": return vaiA({ schermata: "mazzo", qSel: "", tipiAttivi: new Set() });
     case "spesa": case "esporta": return vaiA({ schermata: "mazzo" });
     case "mazzo": return chiudiMazzo();
+    /* dal resoconto si torna al testo, che resta lì: si corregge e si rilegge */
+    case "letto": esciDalContesto(); return vaiA({ schermata: "incolla" });
+    case "incolla": esciDalContesto(); return vaiA({ schermata: null, vista: "mazzi" });
   }
   vaiA({ schermata: null });
 }
@@ -166,6 +171,27 @@ document.addEventListener("click", e => {
     return vaiA({ vista: t.dataset.v, schermata: null, tipiAttivi: new Set(), pannello: false });
   }
 
+  /* resoconto della lista incollata: risolvere un dubbio o togliere una voce */
+  if ((t = el("[data-scelta]"))) {
+    const [i, k] = t.dataset.scelta.split(":").map(Number);
+    STATO.scelteLettura[i] = k;
+    return ridisegnaCorpo();
+  }
+  if ((t = el("[data-togli-voce]"))) {
+    const i = +t.dataset.togliVoce;
+    if (STATO.lettura && STATO.lettura.voci[i]) {
+      STATO.lettura.voci.splice(i, 1);
+      /* le scelte sono indicizzate sulle voci: vanno fatte scorrere anche loro */
+      const nuove = {};
+      for (const j in STATO.scelteLettura) {
+        const x = +j;
+        if (x < i) nuove[x] = STATO.scelteLettura[j];
+        else if (x > i) nuove[x - 1] = STATO.scelteLettura[j];
+      }
+      STATO.scelteLettura = nuove;
+    }
+    return ridisegnaCorpo();
+  }
   if (!(t = el("[data-az]"))) return;
   const m = mazzoAperto();
   switch (t.dataset.az) {
@@ -194,6 +220,32 @@ document.addEventListener("click", e => {
       return vaiA({ schermata: "scegli", qSel: "" });
     }
     case "scegli": return vaiA({ schermata: "scegli", qSel: "", tipiAttivi: new Set() });
+    case "incolla": esciDalContesto(); return vaiA({ schermata: "incolla", mazzo: null });
+    case "leggi": {
+      const campo = document.getElementById("lista");
+      if (campo) STATO.testoLista = campo.value;
+      STATO.lettura = leggiLista(STATO.testoLista);
+      STATO.scelteLettura = {};
+      STATO.nomeLettura = STATO.lettura.nome || "";
+      /* il mazzo nasce nell'epoca più stretta in cui ci sta tutto: è quella che
+         serve per giocarlo davvero. L'epoca di prima si ritrova uscendo. */
+      entraInContesto();
+      STATO.cursore = riassuntoLettura(STATO.lettura, {}).epoca;
+      STATO.soloNuove = false;
+      return vaiA({ schermata: "letto" });
+    }
+    case "crea-lista": {
+      const l = STATO.lettura;
+      if (!l) return vaiA({ schermata: "incolla" });
+      const r = riassuntoLettura(l, STATO.scelteLettura);
+      if (!r.carte.length) return;
+      const campo = document.getElementById("nomeLista");
+      const nome = ((campo && campo.value) || STATO.nomeLettura || l.nome || "Mazzo incollato").trim();
+      const nuovo = creaDaLettura(nome || "Mazzo incollato", STATO.cursore, r);
+      STATO.testoLista = ""; STATO.lettura = null; STATO.scelteLettura = {};
+      STATO.nomeLettura = "";
+      return apriMazzo(nuovo.id);
+    }
     case "apri-mazzo": return vaiA({ schermata: "mazzo" });
     case "spesa": return vaiA({ schermata: "spesa" });
     case "esporta": return vaiA({ schermata: "esporta" });
@@ -225,6 +277,8 @@ document.addEventListener("input", e => {
     return;
   }
   if (e.target.id === "nm") { STATO.nomeNuovo = e.target.value; return; }
+  if (e.target.id === "lista") { STATO.testoLista = e.target.value; return; }
+  if (e.target.id === "nomeLista") { STATO.nomeLettura = e.target.value; return; }
   if (e.target.id === "nomeMazzo") {
     const m = mazzoAperto();
     if (m) { m.nome = e.target.value; m.modificato = Date.now(); salvaMazzi();

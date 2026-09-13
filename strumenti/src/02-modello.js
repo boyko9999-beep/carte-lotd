@@ -154,6 +154,8 @@ const STATO = {
   zona: null,
   ritorno: null,
   nomeNuovo: "",
+  /* la lista incollata e quello che ne ho capito: vivono solo fino alla creazione */
+  testoLista: "", lettura: null, scelteLettura: {}, nomeLettura: "",
   avvisoSalvataggio: false
 };
 let MAZZI = [];
