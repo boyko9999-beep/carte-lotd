@@ -103,6 +103,28 @@ await T('i mazzi ufficiali sono tutti in elenco', async () => {
      await page.textContent('.conta'));
 });
 
+await T('ogni mazzo ha la sua scatola', async () => {
+  const dati = await page.evaluate(() => ({
+    totale: UFFICIALI.length,
+    senza: UFFICIALI.filter(u => !u.i).map(u => u.s),
+    esterni: UFFICIALI.filter(u => !/^https:\/\/ms\.yugipedia\.com\//.test(u.i)).length
+  }));
+  ok('nessuno resta senza immagine', dati.senza.length === 0, dati.senza.join(' '));
+  ok('e vengono tutte dalla stessa fonte', dati.esterni === 0, String(dati.esterni));
+  const rese = await page.evaluate(() => ({
+    img: document.querySelectorAll('#corpo img.scatola').length,
+    piccole: [...document.querySelectorAll('#corpo img.scatola')].filter(i => /120px-/.test(i.src)).length,
+    ripieghi: document.querySelectorAll('#corpo div.scatola').length
+  }));
+  /* qui le immagini sono bloccate apposta: deve reggere il ripiego */
+  ok('a schermo c\'è una scatola per riga',
+     rese.img + rese.ripieghi >= 100, JSON.stringify(rese));
+  ok('e se non arrivano resta il quadretto con la sigla', rese.ripieghi > 0 || rese.img > 0,
+     JSON.stringify(rese));
+  ok('nell\'elenco si chiedono piccole', rese.piccole > 0 || rese.img === 0,
+     `${rese.piccole} di ${rese.img}`);
+});
+
 await T('i filtri dividono structure, starter e giapponesi', async () => {
   const conta = async f => { await page.click(`[data-fuff="${f}"]`); await page.waitForTimeout(350);
     return page.evaluate(() => document.querySelectorAll('[data-uff]').length); };
@@ -165,6 +187,10 @@ await T('aprire uno Starter Deck del 2002', async () => {
      `epoca ${st.epoca} · cursore ${st.cursore}`);
   ok('dice che ci sono tutte', (await corpo()).includes('Tutte le carte del prodotto'),
      (await corpo()).slice(0, 70));
+  ok('in cima c\'è la scatola del prodotto',
+     await page.$('.scatola.grande') !== null);
+  ok('con sigla, anno e tipo', /SDY · 2002 · Starter Deck/.test(await page.textContent('.testa-prodotto')),
+     (await page.textContent('.testa-prodotto')).replace(/\s+/g, ' ').trim().slice(0, 60));
   ok('e spiega che le copie non sono dichiarate', (await corpo()).includes('un esemplare per carta'));
 });
 

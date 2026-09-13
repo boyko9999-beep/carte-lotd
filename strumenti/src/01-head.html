@@ -272,6 +272,15 @@
   .quante{flex:none;align-self:center;font-size:15px;color:var(--gold);font-weight:600}
   .via-voce{flex:none;align-self:center;padding:4px 8px;color:var(--muted);font-size:15px;line-height:1}
   .via-voce:hover{color:var(--rosso)}
+  /* le scatole sono verticali (rapporto 0,6-0,7): lo spazio ha la loro forma */
+  .scatola{width:48px;height:66px;flex:none;object-fit:contain;border-radius:6px;
+    background:var(--panel2);border:1px solid var(--line)}
+  div.scatola{display:grid;place-items:center;font-family:Spectral,serif;font-size:13px;
+    color:#1a1622;font-weight:600}
+  .scatola.grande{width:auto;max-width:200px;max-height:260px;height:auto;display:block;
+    margin:0 auto;border:1px solid var(--gold-dim);border-radius:8px}
+  .testa-prodotto{text-align:center;padding:10px 0 2px}
+  .testa-prodotto p{margin:8px 0 0;color:var(--muted);font-size:13px}
   .ris.tolta{opacity:.5}
   .ris.tolta .nome{text-decoration:line-through}
   .ignota{margin-top:8px}

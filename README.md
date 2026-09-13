@@ -64,6 +64,11 @@ gioca; con un tocco diventa una tua ricetta, con la lista della spesa per andare
 a prendere le carte. L'archivio non dichiara quante copie ci siano nella scatola,
 quindi si parte con un esemplare per carta.
 
+Ogni mazzo mostra **la sua scatola** (da yugipedia, come i ritratti dei
+duellanti): piccola nell'elenco — chiesta a 120 px, 50 KB invece di 190 — e
+grande nella schermata del prodotto. Se l'immagine non arriva resta il quadretto
+con la sigla, quindi non si vede mai un buco.
+
 Un mazzo si cerca per quello che contiene, non per come si chiama la scatola:
 *sei samurai* trova «I Samurai Signori della Guerra» (21 carte), *zombie* mette
 davanti «Orda Zombie» (27), *eroi elementari* trova gli HERO. Ogni riga dice
@@ -169,6 +174,6 @@ node strumenti/prova10-incolla.mjs  # lista incollata: lettura, nomi, epoca, cre
 node strumenti/prova11-ufficiali.mjs # mazzi ufficiali e pagina del database di Konami
 ```
 
-360 controlli su un Chromium headless. La prova 5 misura anche i tempi: avvio
+367 controlli su un Chromium headless. La prova 5 misura anche i tempi: avvio
 sotto i 200 ms, ricerca su 10.026 carte sotto il mezzo secondo, e il pulsante
 «Mostra altre carte» che non rallenta man mano che la griglia cresce.

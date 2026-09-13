@@ -801,5 +801,12 @@ function vistaLetto() {
         + r.tolte.map(x => rigaLetta(x.k, 0, x.voci, true)).join("") : ""}`;
   };
   const u = STATO.lettura.ufficiale != null ? UFFICIALI[STATO.lettura.ufficiale] : null;
-  return { titolo: u ? nomeUfficiale(u) : "Cosa ho letto", indietro: true, corpo };
+  return {
+    titolo: u ? nomeUfficiale(u) : "Cosa ho letto", indietro: true,
+    testa: u ? `<div class="testa-prodotto">${scatolaHTML(u, "scatola grande")}
+      <p>${esc(u.s)} · ${esc(u.d.slice(0, 4))} · ${eStarter(u) ? "Starter" : "Structure"} Deck${
+        soloOCG(u) ? " · uscito solo in Giappone" : ""}</p>
+      ${u.it && u.it !== u.n ? `<p class="nota">Nome originale: ${esc(u.n)}</p>` : ""}</div>` : "",
+    corpo
+  };
 }

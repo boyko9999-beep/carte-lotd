@@ -348,6 +348,30 @@ def nomi_da_lista(w, codici):
             if re.fullmatch(r"[A-Z0-9]{2,6}", codice): codici.append(codice)
     return fuori
 
+def file_immagine(v):
+    """Il nome del file dell'immagine di scatola, dall'infobox."""
+    v = re.sub(r"\[\[(?:File|Image):", "", v or "")
+    m = re.search(r"([^|\]<>\n]+\.(?:png|jpg|jpeg))", v, re.I)
+    return m.group(1).strip() if m else ""
+
+def url_immagini(nomi):
+    """Da nome di file a indirizzo vero, quaranta per volta."""
+    fuori, elenco = {}, sorted({n for n in nomi if n})
+    for i in range(0, len(elenco), 40):
+        gruppo = elenco[i:i + 40]
+        try:
+            d = wiki({"action": "query", "prop": "imageinfo", "iiprop": "url",
+                      "iiurlwidth": "260", "titles": "|".join("File:" + n for n in gruppo)})
+        except Exception as e:
+            print("  immagini non disponibili:", e, file=sys.stderr); continue
+        for p in d.get("query", {}).get("pages", []):
+            ii = (p.get("imageinfo") or [{}])[0]
+            u = ii.get("thumburl") or ii.get("url")
+            if u:
+                fuori[p["title"][5:]] = u.replace("https://ms.yugipedia.com//",
+                                                  "https://ms.yugipedia.com/")
+    return fuori
+
 def mazzi_ufficiali():
     if os.path.exists(UFF_FILE):
         return json.load(open(UFF_FILE, encoding="utf-8"))
@@ -403,8 +427,12 @@ def mazzi_ufficiali():
         fuori.append({"nome": en, "it": campo_infobox(w, "it_name"),
                       "sigla": sigla_lista or campo_infobox(w, "prefix"), "data": date[0],
                       "tcg": tcg, "tipo": "starter" if "starter deck" in tipo else "structure",
-                      "carte": carte})
+                      "img": file_immagine(campo_infobox(w, "image")), "carte": carte})
         print(f"  {date[0]} {(sigla_lista or campo_infobox(w, 'prefix')):6s} {en[:44]:44s} {len(carte)}", file=sys.stderr)
+    # le scatole: un indirizzo per prodotto, risolto in blocco
+    indirizzi = url_immagini([m["img"] for m in fuori])
+    for m in fuori: m["img"] = indirizzi.get(m["img"], "")
+    print(f"  immagini trovate: {sum(1 for m in fuori if m['img'])} su {len(fuori)}", file=sys.stderr)
     json.dump(fuori, open(UFF_FILE, "w", encoding="utf-8"), ensure_ascii=False)
     return fuori
 
@@ -423,7 +451,7 @@ for m in mazzi_ufficiali():
     # i bundle da una o due carte non sono mazzi
     if len(set(dentro)) < 20: continue
     UFFICIALI.append({"n": m["nome"], "it": m["it"], "s": m["sigla"], "d": m["data"],
-                      "c": sorted(set(dentro)), "f": fuori_gioco,
+                      "c": sorted(set(dentro)), "f": fuori_gioco, "i": m.get("img", ""),
                       "g": (0 if m["tcg"] else 1) + (0 if m["tipo"] == "structure" else 2)})
 UFFICIALI.sort(key=lambda u: (u["d"], u["n"]))
 print("mazzi ufficiali:", len(UFFICIALI),

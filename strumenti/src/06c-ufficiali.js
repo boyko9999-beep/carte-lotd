@@ -15,6 +15,24 @@ const taccaDiData = d => {
 const sagaUfficiale = u => TACCHE[taccaDiData(u.d)].s;
 const nomeUfficiale = u => u.it || u.n;
 
+/* La scatola del prodotto. Se l'immagine non arriva (siamo offline, o un
+   giorno quell'indirizzo non c'è più) resta il quadretto con la sigla, che è
+   quello che c'era prima: non si vede mai un buco. */
+function scatolaHTML(u, cls) {
+  cls = cls || "scatola";
+  const sigla = u.s || (u.g & 2 ? "ST" : "SD");
+  const ripiego = `<div class="${cls} saga-t" style="background:${SAGHE[sagaUfficiale(u)].colore}">${esc(sigla)}</div>`;
+  if (!u.i) return ripiego;
+  /* la scatola piccola si chiede piccola: 52 KB invece di 190, e nell'elenco
+     ce ne sono centoventi */
+  const indirizzo = cls === "scatola" && u.i.indexOf("/thumb/") > 0
+    ? u.i.replace("/260px-", "/120px-") : u.i;
+  const dentroAttributo = ripiego.replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  return `<img class="${cls}" src="${esc(indirizzo)}" alt="" loading="lazy"
+    onerror="this.outerHTML='${dentroAttributo}'">`;
+}
+
 const soloOCG = u => !!(u.g & 1);
 const eStarter = u => !!(u.g & 2);
 const FILTRI_UFF = [["tutti", "Tutti"], ["structure", "Structure Deck"],
@@ -76,7 +94,7 @@ function vistaUfficiali() {
       }
       const qui = u.c.filter(dentro).length;
       html += `<button class="duel" data-uff="${x.i}">
-        <div class="saga-t" style="background:${SAGHE[s].colore}">${esc(u.s || (eStarter(u) ? "ST" : "SD"))}</div>
+        ${scatolaHTML(u)}
         <span style="min-width:0"><span class="nome">${esc(nomeUfficiale(u))}</span>
         <small>${esc(u.d.slice(0, 4))} · ${eStarter(u) ? "Starter" : "Structure"} Deck${
           soloOCG(u) ? " · solo Giappone" : ""} · ${num(u.c.length)} carte${
